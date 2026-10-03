@@ -250,7 +250,7 @@ class OptionChainDB:
         with self._get_connection() as conn:
             return pd.read_sql_query(query, conn, params=(snapshot_id,))
 
-    def get_candles(self, instrument_key: str = "NSE_INDEX|Nifty 50", limit: int = 100) -> List[Dict[str, Any]]:
+    def get_candles(self, instrument_key: str = "BTC", limit: int = 100) -> List[Dict[str, Any]]:
         """
         Fetches historical spot prices aggregated into 1-minute OHLC candles for TradingView Lightweight Charts.
         """
@@ -302,7 +302,7 @@ class OptionChainDB:
         candles.sort(key=lambda x: x["time"])
         return candles[-limit:]
 
-    def get_920_snapshot(self, instrument_key: str = "NSE_INDEX|Nifty 50", target_date: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
+    def get_920_snapshot(self, instrument_key: str = "BTC", target_date: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
         """
         Strictly queries SQLite database for 09:20:00 AM IST snapshot for target date.
         Does NOT fallback to live current time.
