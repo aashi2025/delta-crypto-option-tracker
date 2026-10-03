@@ -275,12 +275,23 @@ class OptionChainCalculationEngine:
                 "summary": f"COA 2.0 Confirmed: Call IV ({avg_call_iv:.1f}%) vs Put IV ({avg_put_iv:.1f}%) aligns with scenario."
             }
 
-    def _determine_buyer_directive(self, scenario_num: int, supp_strike: float, res_strike: float, eos_price: float, eor_price: float, ur_price: float, us_price: float, soc_detected: bool) -> Dict[str, Any]:
+    def _determine_buyer_directive(self, scenario_num: int, supp_strike: float, res_strike: float, eos_price: float, eor_price: float, ur_price: float, us_price: float, soc_detected: bool, spot_price: float = 0.0) -> Dict[str, Any]:
         """
         Determines Option Buyer's exact directive: Trade Type (BUY CE / BUY PE / NO TRADE),
         Recommended Strike Price, Entry Point, Exit/Target Point, and Calculated Stop Loss (SL).
+        Risk Stop Loss buffer is dynamic (proportional 0.5% of spot price level):
+        - BTC (~$85,000): ~425 pts risk
+        - ETH (~$2,680): ~13.4 pts risk
+        - SOL (~$150): ~0.75 pts risk
         """
-        buffer_pts = 15.0  # 15 index points risk buffer
+        if spot_price > 10000:
+            buffer_pts = round(spot_price * 0.005, 1)
+        elif spot_price > 1000:
+            buffer_pts = round(spot_price * 0.005, 1)
+        elif spot_price > 0:
+            buffer_pts = round(spot_price * 0.005, 2)
+        else:
+            buffer_pts = 15.0
         
         if soc_detected or scenario_num in [6, 8]:
             return {
@@ -518,7 +529,8 @@ class OptionChainCalculationEngine:
             eor_price,
             ur_price,
             us_price,
-            coa_info.get("soc_detected", False)
+            coa_info.get("soc_detected", False),
+            spot_price=spot_price
         )
 
         # Evaluate COA 2.0 Confirmation (IV Comparative Bias & Trap Filter)
