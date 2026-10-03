@@ -10,12 +10,20 @@ from server import app as fastapi_app
 
 async def app(scope, receive, send):
     if scope.get("type") == "http":
-        path = scope.get("path", "")
-        # Strip Vercel serverless script prefix
-        if path in ["/api/index.py", "/api/index", "/api"]:
-            scope["path"] = "/"
-        elif path.startswith("/api/index.py/"):
-            scope["path"] = path[len("/api/index.py"):]
-        elif path.startswith("/api/index/"):
-            scope["path"] = path[len("/api/index"):]
+        headers = dict(scope.get("headers", []))
+        forwarded_uri = headers.get(b"x-forwarded-uri", b"").decode("utf-8")
+        if not forwarded_uri:
+            forwarded_uri = headers.get(b"x-url", b"").decode("utf-8")
+            
+        if forwarded_uri:
+            clean_path = forwarded_uri.split("?")[0]
+            if clean_path in ["/api/index.py", "/api/index"]:
+                scope["path"] = "/"
+            else:
+                scope["path"] = clean_path
+        else:
+            path = scope.get("path", "")
+            if path in ["/api/index.py", "/api/index", "/api", "/api/"]:
+                scope["path"] = "/"
+                
     await fastapi_app(scope, receive, send)
