@@ -795,6 +795,8 @@ def serve_dashboard():
         document.getElementById("refresh-progress").style.width = pct + "%";
     }
 
+    let currentPlayingAudio = null;
+
     // Pure MP3 Hindi Audio Player with 10-Minute Anti-Spam Cooldown Filter
     function playHindiMP3(text, alertKey) {
         if (!voiceAlertsEnabled || !text) return;
@@ -810,9 +812,18 @@ def serve_dashboard():
 
         voiceLastPlayedMap[key] = now;
 
+        // Stop any currently playing audio so voices NEVER overlap!
+        if (currentPlayingAudio) {
+            try {
+                currentPlayingAudio.pause();
+                currentPlayingAudio.currentTime = 0;
+            } catch (e) {}
+        }
+
         try {
             const audioUrl = `/api/tts-audio?text=${encodeURIComponent(text)}`;
             const audio = new Audio(audioUrl);
+            currentPlayingAudio = audio;
             audio.play().catch(err => {
                 console.warn("Audio play blocked by browser:", err);
             });
@@ -829,6 +840,11 @@ def serve_dashboard():
 
     function triggerToastAlert(title, message, severity) {
         const container = document.getElementById("toast-container");
+        if (!container) return;
+
+        // Clear previous toast elements so at most 1 alert card is shown on screen at a time!
+        container.innerHTML = "";
+
         const bgClass = severity === "DANGER" ? "bg-danger text-white" : "bg-warning text-dark";
         const icon = severity === "DANGER" ? "fa-triangle-exclamation" : "fa-bell";
 
@@ -847,7 +863,7 @@ def serve_dashboard():
         
         setTimeout(() => {
             if (toastHTML.parentNode) toastHTML.parentNode.removeChild(toastHTML);
-        }, 8000);
+        }, 5000);
     }
 
     // ==========================================
