@@ -27,6 +27,19 @@ CSV_PATH = os.getenv("CSV_PATH", DEFAULT_CSV).strip()
 
 app = FastAPI(title="Ashish Goswami LTP Calculator Pro - Crypto (Delta Exchange)")
 
+
+@app.middleware("http")
+async def fix_vercel_routing(request, call_next):
+    raw_path = request.headers.get("x-forwarded-uri", "").split("?")[0]
+    if raw_path:
+        request.scope["path"] = raw_path
+    else:
+        path = request.scope.get("path", "")
+        if path in ["/api/index.py", "/api/index", "/api", "/api/"]:
+            request.scope["path"] = "/"
+    response = await call_next(request)
+    return response
+
 service = DeltaExchangeService(DELTA_API_KEY, DELTA_API_SECRET)
 db = OptionChainDB(DB_PATH)
 calc_engine = OptionChainCalculationEngine()
