@@ -65,7 +65,7 @@ def get_spot_price_api(instrument: str = Query(DEFAULT_INSTRUMENT)):
 
 
 @app.get("/api/tts-audio")
-def get_tts_audio(text: str = Query("सावधान! निफ्टी का रिवर्सल लेवल आ गया है")):
+def get_tts_audio(text: str = Query("सावधान! क्रिप्टो का रिवर्सल लेवल आ गया है")):
     """
     Generates real MP3 Hindi Voice Stream using Google TTS.
     Returns 100% Pure Hindi Audio (no English mixing!).
@@ -534,7 +534,7 @@ def serve_dashboard():
             <div class="col-6 col-sm-4 col-md">
                 <div class="p-2 rounded bg-dark border border-info h-100">
                     <small class="text-info fw-bold d-block">Spot Price</small>
-                    <small class="text-muted d-block" style="font-size:0.7rem;">(निफ्टी लाइव भाव)</small>
+                    <small class="text-muted d-block" style="font-size:0.7rem;">(क्रिप्टो / बिटकॉइन लाइव भाव)</small>
                     <div id="spot-price" class="fw-bold text-info fs-5 mt-1">-</div>
                 </div>
             </div>
@@ -602,7 +602,7 @@ def serve_dashboard():
                         <h5 class="m-0 text-info fs-6 fs-md-5">
                             <i class="fa-solid fa-chart-candlestick me-2"></i>TradingView Chart & Reversal Levels (IST)
                         </h5>
-                        <span id="chart-instrument-tag" class="badge bg-secondary">NIFTY 50</span>
+                        <span id="chart-instrument-tag" class="badge bg-secondary">BTC</span>
                     </div>
 
                     <!-- Line Visibility Checkboxes Toolbar -->
@@ -804,8 +804,8 @@ def serve_dashboard():
     }
 
     function testHindiVoice() {
-        const sampleMsg = "सावधान! निफ्टी का रिवर्सल लेवल सपोर्ट के पास तेईस हज़ार इकतालीस पर पहुँच गया है";
-        triggerToastAlert("हिंदी MP3 वॉइस टेस्ट", "सावधान! निफ्टी का रिवर्सल लेवल तेईस हज़ार इकतालीस पर पहुँच गया है", "DANGER");
+        const sampleMsg = "सावधान! बिटकॉइन क्रिप्टो का रिवर्सल लेवल सपोर्ट के पास पहुँच गया है";
+        triggerToastAlert("हिंदी MP3 वॉइस टेस्ट", "सावधान! बिटकॉइन क्रिप्टो का रिवर्सल लेवल पहुँच गया है", "DANGER");
         playHindiMP3(sampleMsg, "TEST_VOICE_KEY_" + Date.now());
     }
 
@@ -961,10 +961,10 @@ def serve_dashboard():
         const eor = s.eor_920;
 
         if (eos > 0 && Math.abs(spot - eos) <= 5.0) {
-            const voiceText = `ध्यान दें! निफ्टी नौ बीस के मॉर्निंग रिवर्सल सपोर्ट ${eos.toFixed(0)} के पास पहुँच गया है। कॉल साइड ट्रेड एक्टिव है`;
+            const voiceText = `ध्यान दें! क्रिप्टो नौ बीस के मॉर्निंग रिवर्सल सपोर्ट ${eos.toFixed(0)} के पास पहुँच गया है। कॉल साइड ट्रेड एक्टिव है`;
             playHindiMP3(voiceText, `PROX_920_EOS_${Math.round(eos)}`);
         } else if (eor > 0 && Math.abs(spot - eor) <= 5.0) {
-            const voiceText = `ध्यान दें! निफ्टी नौ बीस के मॉर्निंग रिवर्सल रेजिस्टेंस ${eor.toFixed(0)} के पास पहुँच गया है। पुट साइड ट्रेड एक्टिव है`;
+            const voiceText = `ध्यान दें! क्रिप्टो नौ बीस के मॉर्निंग रिवर्सल रेजिस्टेंस ${eor.toFixed(0)} के पास पहुँच गया है। पुट साइड ट्रेड एक्टिव है`;
             playHindiMP3(voiceText, `PROX_920_EOR_${Math.round(eor)}`);
         }
     }
