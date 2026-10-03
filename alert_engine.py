@@ -238,7 +238,7 @@ class OptionChainAlertEngine:
             eos_hindi = number_to_hindi_words(eos_price)
             title = "सपोर्ट का रिवर्सल लेवल आ गया!"
             msg = f"Spot Price ({spot_price:,.2f}) is within {diff:.2f} pts of Extension of Support (EOS: {eos_price:,.2f})"
-            hindi_voice = f"ध्यान दें! निफ्टी सपोर्ट के रिवर्सल लेवल {eos_hindi} के पास पहुँच गया है"
+            hindi_voice = f"ध्यान दें! क्रिप्टो सपोर्ट के रिवर्सल लेवल {eos_hindi} के पास पहुँच गया है"
 
             alert_evt = {
                 "type": "PROXIMITY",
@@ -258,7 +258,7 @@ class OptionChainAlertEngine:
             eor_hindi = number_to_hindi_words(eor_price)
             title = "रेजिस्टेंस का रिवर्सल लेवल आ गया!"
             msg = f"Spot Price ({spot_price:,.2f}) is within {diff:.2f} pts of Extension of Resistance (EOR: {eor_price:,.2f})"
-            hindi_voice = f"ध्यान दें! निफ्टी रेजिस्टेंस के रिवर्सल लेवल {eor_hindi} के पास पहुँच गया है"
+            hindi_voice = f"ध्यान दें! क्रिप्टो रेजिस्टेंस के रिवर्सल लेवल {eor_hindi} के पास पहुँच गया है"
 
             alert_evt = {
                 "type": "PROXIMITY",
