@@ -68,20 +68,32 @@ class DeltaExchangeService:
         target_expiry = expiry_date if (expiry_date and expiry_date in expiries) else (expiries[0] if expiries else None)
 
         spot_price = 0.0
-        # Find underlying spot price from tickers
+        # Find underlying spot price from tickers (strictly index spot_price first)
         for t in tickers:
             sym = t.get("symbol", "")
             if sym == f"{symbol_prefix}USDT" or sym == f"{symbol_prefix}USD":
-                spot_price = float(t.get("spot_price") or t.get("close") or t.get("mark_price") or 0.0)
-                if spot_price > 0:
+                raw_spot = t.get("spot_price")
+                if raw_spot and float(raw_spot) > 0:
+                    spot_price = float(raw_spot)
                     break
 
         if spot_price <= 0:
-            # Fallback spot price from option tickers
+            # Fallback spot price from option tickers (which carry exact index spot_price)
             for t in tickers:
                 if f"-{symbol_prefix}-" in t.get("symbol", "") and t.get("spot_price"):
-                    spot_price = float(t.get("spot_price"))
-                    break
+                    raw_spot = t.get("spot_price")
+                    if raw_spot and float(raw_spot) > 0:
+                        spot_price = float(raw_spot)
+                        break
+
+        if spot_price <= 0:
+            # Final fallback to mark_price / close if spot_price is completely missing
+            for t in tickers:
+                sym = t.get("symbol", "")
+                if sym == f"{symbol_prefix}USDT" or sym == f"{symbol_prefix}USD":
+                    spot_price = float(t.get("mark_price") or t.get("close") or 0.0)
+                    if spot_price > 0:
+                        break
 
         # Group Call and Put options by Strike Price
         strikes_map: Dict[float, Dict[str, Any]] = {}
