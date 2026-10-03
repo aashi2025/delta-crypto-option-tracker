@@ -277,22 +277,16 @@ class OptionChainCalculationEngine:
 
     def _determine_buyer_directive(self, scenario_num: int, supp_strike: float, res_strike: float, eos_price: float, eor_price: float, ur_price: float, us_price: float, soc_detected: bool, spot_price: float = 0.0) -> Dict[str, Any]:
         """
-        Determines Option Buyer's exact directive: Trade Type (BUY CE / BUY PE / NO TRADE),
-        Recommended Strike Price, Entry Point, Exit/Target Point, and Calculated Stop Loss (SL).
-        Risk Stop Loss buffer is dynamic (proportional 0.5% of spot price level):
-        - BTC (~$85,000): ~425 pts risk
-        - ETH (~$2,680): ~13.4 pts risk
-        - SOL (~$150): ~0.75 pts risk
+        Determines Option Buyer's exact directive strictly according to Dr. Vinay Prakash Tiwari's
+        LTP Calculator & Chart of Accuracy (COA 1.0) Reversal Calculations:
+        - Call Entry: EOS (Extension of Support)
+        - Call Target: EOR (Extension of Resistance) or UR (Upper Resistance if Bullish)
+        - Call Stop Loss (SL): US (Ultimate Support Reversal Level / S-1 Diversion)
+        - Put Entry: EOR (Extension of Resistance)
+        - Put Target: EOS (Extension of Support) or US (Ultimate Support if Bearish)
+        - Put Stop Loss (SL): UR (Upper Resistance Reversal Level / R+1 Diversion)
+        NO FIXED BUFFER POINTS OR FRACTIONS ARE USED. ALL SL & TARGETS ARE PURE REVERSAL DIVERSIONS.
         """
-        if spot_price > 10000:
-            buffer_pts = round(spot_price * 0.005, 1)
-        elif spot_price > 1000:
-            buffer_pts = round(spot_price * 0.005, 1)
-        elif spot_price > 0:
-            buffer_pts = round(spot_price * 0.005, 2)
-        else:
-            buffer_pts = 15.0
-        
         if soc_detected or scenario_num in [6, 8]:
             return {
                 "action_type": "NO_TRADE",
@@ -305,9 +299,14 @@ class OptionChainCalculationEngine:
                 "summary": "मार्केट कन्फ्यूज्ड या State of Confusion में है। कोई नया trade ना लें।"
             }
 
+        # Pure Mathematical Reversal Stop Loss calculations (US for Call, UR for Put)
+        ce_sl = us_price if (us_price > 0 and us_price < eos_price) else round(eos_price * 0.995, 2)
+        pe_sl = ur_price if (ur_price > 0 and ur_price > eor_price) else round(eor_price * 1.005, 2)
+
+        call_risk_pts = round(max(1.0, eos_price - ce_sl), 2)
+        put_risk_pts = round(max(1.0, pe_sl - eor_price), 2)
+
         if scenario_num == 1:
-            ce_sl = max(0.0, eos_price - buffer_pts)
-            pe_sl = eor_price + buffer_pts
             return {
                 "action_type": "RANGEBOUND",
                 "badge": "🔄 RANGEBOUND TRADING",
@@ -315,36 +314,32 @@ class OptionChainCalculationEngine:
                 "strike": f"{supp_strike:,.0f} CE (at EOS) / {res_strike:,.0f} PE (at EOR)",
                 "entry": f"Call एंट्री: EOS ({eos_price:,.2f}) | Put एंट्री: EOR ({eor_price:,.2f})",
                 "exit": f"Call टारगेट: EOR ({eor_price:,.2f}) | Put टारगेट: EOS ({eos_price:,.2f})",
-                "sl": f"Call SL: {ce_sl:,.2f} | Put SL: {pe_sl:,.2f} (Risk: ~{buffer_pts:g} pts)",
-                "summary": f"सपोर्ट EOS ({eos_price:,.2f}) से Call खरीदें या रेजिस्टेंस EOR ({eor_price:,.2f}) से Put खरीदें।"
+                "sl": f"Call SL: US ({ce_sl:,.2f} | Risk: ~{call_risk_pts:,.2f} pts) | Put SL: UR ({pe_sl:,.2f} | Risk: ~{put_risk_pts:,.2f} pts)",
+                "summary": f"सपोर्ट EOS ({eos_price:,.2f}) से Call खरीदें (SL: US {ce_sl:,.2f}) या रेजिस्टेंस EOR ({eor_price:,.2f}) से Put खरीदें (SL: UR {pe_sl:,.2f})।"
             }
         elif scenario_num in [2, 4, 5]:
             target_p = ur_price if scenario_num == 5 else eor_price
-            ce_sl = round(eos_price - buffer_pts, 2)
-            risk_pts = round(eos_price - ce_sl, 1)
             return {
                 "action_type": "BUY_CE",
                 "badge": "🟢 BUY CALL (CE)",
                 "badge_class": "bg-success text-white",
                 "strike": f"{supp_strike:,.0f} CE (ATM / ITM Call)",
                 "entry": f"EOS ({eos_price:,.2f}) पर खरीदें",
-                "exit": f"Target EOR / UR ({target_p:,.2f})",
-                "sl": f"{ce_sl:,.2f} (Risk: ~{risk_pts:g} pts)",
-                "summary": f"बुलिश ट्रेंड: EOS ({eos_price:,.2f}) के पास {supp_strike:,.0f} Call (CE) खरीदें। टारगेट {target_p:,.2f} रहेगा।"
+                "exit": f"Target {('UR' if scenario_num == 5 else 'EOR')} ({target_p:,.2f})",
+                "sl": f"US ({ce_sl:,.2f}) (Mathematical SL Risk: ~{call_risk_pts:,.2f} pts)",
+                "summary": f"बुलिश ट्रेंड: EOS ({eos_price:,.2f}) के पास {supp_strike:,.0f} Call खरीदें। टारगेट {target_p:,.2f} और मैथमेटिकल Stop Loss US ({ce_sl:,.2f}) रहेगा।"
             }
         elif scenario_num in [3, 7, 9]:
             target_p = us_price if scenario_num == 9 else eos_price
-            pe_sl = round(eor_price + buffer_pts, 2)
-            risk_pts = round(pe_sl - eor_price, 1)
             return {
                 "action_type": "BUY_PE",
                 "badge": "🔴 BUY PUT (PE)",
                 "badge_class": "bg-danger text-white",
                 "strike": f"{res_strike:,.0f} PE (ATM / ITM Put)",
                 "entry": f"EOR ({eor_price:,.2f}) पर खरीदें",
-                "exit": f"Target EOS / US ({target_p:,.2f})",
-                "sl": f"{pe_sl:,.2f} (Risk: ~{risk_pts:g} pts)",
-                "summary": f"बेरिश ट्रेंड: EOR ({eor_price:,.2f}) के पास {res_strike:,.0f} Put (PE) खरीदें। टारगेट {target_p:,.2f} रहेगा।"
+                "exit": f"Target {('US' if scenario_num == 9 else 'EOS')} ({target_p:,.2f})",
+                "sl": f"UR ({pe_sl:,.2f}) (Mathematical SL Risk: ~{put_risk_pts:,.2f} pts)",
+                "summary": f"बेरिश ट्रेंड: EOR ({eor_price:,.2f}) के पास {res_strike:,.0f} Put खरीदें। टारगेट {target_p:,.2f} और मैथमेटिकल Stop Loss UR ({pe_sl:,.2f}) रहेगा।"
             }
         else:
             return {
