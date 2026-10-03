@@ -30,12 +30,15 @@ app = FastAPI(title="Ashish Goswami LTP Calculator Pro - Crypto (Delta Exchange)
 
 @app.middleware("http")
 async def fix_vercel_routing(request, call_next):
-    raw_path = request.headers.get("x-forwarded-uri", "").split("?")[0]
-    if raw_path:
-        request.scope["path"] = raw_path
+    query_path = request.query_params.get("path")
+    if query_path is not None:
+        target_path = "/" + query_path.lstrip("/")
+        request.scope["path"] = target_path
+    elif request.headers.get("x-forwarded-uri"):
+        request.scope["path"] = request.headers.get("x-forwarded-uri").split("?")[0]
     else:
-        path = request.scope.get("path", "")
-        if path in ["/api/index.py", "/api/index", "/api", "/api/"]:
+        p = request.scope.get("path", "")
+        if p in ["/api/index.py", "/api/index", "/api", "/api/"]:
             request.scope["path"] = "/"
     response = await call_next(request)
     return response
