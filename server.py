@@ -224,6 +224,8 @@ def get_option_chain_data(
 
 
 @app.get("/", response_class=HTMLResponse)
+@app.get("/api/index.py", response_class=HTMLResponse)
+@app.get("/api", response_class=HTMLResponse)
 def serve_dashboard():
     """Serves main web dashboard HTML page with Lightweight Chart IST TimeZone, 9:20 Strict DB Lock, and COA 1.0/2.0 Engine."""
     html_content = """<!DOCTYPE html>
