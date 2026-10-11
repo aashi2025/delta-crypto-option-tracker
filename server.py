@@ -12,6 +12,7 @@ from delta_service import DeltaExchangeService
 from database import OptionChainDB
 from calculation_engine import OptionChainCalculationEngine
 from alert_engine import OptionChainAlertEngine
+from trade_audit_engine import TradeAuditEngine
 
 # Load environment variables
 load_dotenv()
@@ -47,6 +48,16 @@ service = DeltaExchangeService(DELTA_API_KEY, DELTA_API_SECRET)
 db = OptionChainDB(DB_PATH)
 calc_engine = OptionChainCalculationEngine()
 alert_engine = OptionChainAlertEngine(proximity_threshold=50.0)
+audit_engine = TradeAuditEngine(db, service, calc_engine, buffer_pct=0.003, cooldown_minutes=60)
+
+try:
+    audit_engine.seed_historical_audit_records_if_empty()
+except Exception as _e:
+    print(f"[WARNING] Audit seeding warning: {_e}")
+
+# Start background level trigger & outcome evaluation engine (3-5 min cycle)
+if not IS_VERCEL:
+    audit_engine.start_background_worker(interval_seconds=180)
 
 
 @app.get("/api/expiries")
@@ -215,6 +226,13 @@ def get_option_chain_data(
 
         db.save_snapshot(records_with_reversals, analysis_res=analysis_res, csv_path=CSV_PATH)
 
+        # Dual-protection: Check setup triggers & evaluate active trades on poll cycle
+        try:
+            audit_engine.check_and_trigger_setups(symbol_prefix)
+            audit_engine.evaluate_active_trades(symbol_prefix)
+        except Exception as _ae:
+            print(f"[WARNING] On-poll audit check warning: {_ae}")
+
         return {
             "status": "success",
             "meta": meta,
@@ -235,6 +253,41 @@ def get_option_chain_data(
             "records": records_with_reversals
         }
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/trade-audit")
+def get_trade_audit_endpoint(
+    date: Optional[str] = Query(None),
+    asset: Optional[str] = Query(None),
+    evaluate_now: bool = Query(True)
+):
+    """
+    Automated Trade Audit & Performance Tracker API:
+    Returns performance summary metrics (Setups, Target Hits, SL Hits, Win Rate),
+    distinct dates list, and detailed historical audit logs.
+    """
+    try:
+        if evaluate_now:
+            audit_engine.evaluate_active_trades(asset=asset)
+        data = audit_engine.get_dashboard_audit_data(date_filter=date, asset=asset)
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/trade-audit/trigger-check")
+@app.get("/api/trade-audit/trigger-check")
+def trigger_trade_audit_check(asset: Optional[str] = Query(None)):
+    """
+    Manually forces background level trigger check and active trade evaluation.
+    """
+    try:
+        assets = [asset.upper()] if asset else ["BTC", "ETH"]
+        audit_engine.evaluate_and_log_all_assets(assets=assets)
+        data = audit_engine.get_dashboard_audit_data(asset=asset)
+        return {"status": "success", "message": "Audit evaluation completed", "data": data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -694,6 +747,114 @@ def serve_dashboard():
             </div>
         </div>
 
+    </div>
+
+    <!-- 3. AUTOMATED TRADE AUDIT & DAILY PERFORMANCE TRACKER PANEL -->
+    <div class="card-custom p-3 mb-3 border-warning" id="trade-audit-panel" style="background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);">
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border-bottom border-secondary pb-2">
+            <div class="d-flex align-items-center gap-2">
+                <i class="fa-solid fa-clipboard-check text-warning fs-4"></i>
+                <div>
+                    <h5 class="m-0 text-warning fw-bold">
+                        📋 Automated Trade Audit & Performance Tracker (Setups Success/Fail Log)
+                    </h5>
+                    <small class="text-muted">
+                        Auto-logs EOS Bullish & EOR Bearish reversals within 0.3% buffer range | Tracks Target vs Stop-Loss in real time
+                    </small>
+                </div>
+            </div>
+
+            <!-- Audit Filter Toolbar -->
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small fw-bold"><i class="fa-solid fa-calendar-day me-1"></i>Date:</span>
+                    <select id="audit-date-filter" class="form-select form-select-sm bg-dark text-warning border-warning" style="width: 150px;">
+                        <option value="ALL">📅 All Dates</option>
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-center gap-1">
+                    <span class="text-muted small fw-bold"><i class="fa-brands fa-bitcoin me-1"></i>Asset:</span>
+                    <select id="audit-asset-filter" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 130px;">
+                        <option value="ALL">All Assets</option>
+                        <option value="BTC">BTC Only</option>
+                        <option value="ETH">ETH Only</option>
+                        <option value="SOL">SOL Only</option>
+                    </select>
+                </div>
+
+                <button id="btn-sync-audit" class="btn btn-outline-warning btn-sm" title="Manually scan levels and evaluate active trades">
+                    <i class="fa-solid fa-arrows-rotate me-1"></i> Sync & Check Now
+                </button>
+            </div>
+        </div>
+
+        <!-- Top Summary Metric Cards Row -->
+        <div class="row g-2 text-center mb-3">
+            <!-- 1. Total Setups Triggered -->
+            <div class="col-6 col-md-3">
+                <div class="p-3 rounded bg-dark border border-secondary h-100">
+                    <small class="text-muted fw-bold d-block text-uppercase" style="font-size:0.75rem;">Total Setups Triggered</small>
+                    <div id="stat-total-setups" class="fw-bold text-info fs-3 mt-1">0</div>
+                    <small class="text-muted d-block" style="font-size:0.7rem;">(EOS & EOR Setups)</small>
+                </div>
+            </div>
+
+            <!-- 2. Target Hit Count & Win Rate -->
+            <div class="col-6 col-md-3">
+                <div class="p-3 rounded bg-dark border border-success h-100">
+                    <small class="text-success fw-bold d-block text-uppercase" style="font-size:0.75rem;">Target Hit Count</small>
+                    <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
+                        <span id="stat-target-hits" class="fw-bold text-success fs-3">0</span>
+                        <span id="stat-win-rate" class="badge bg-success fs-6">0% Win Rate</span>
+                    </div>
+                    <small class="text-muted d-block" style="font-size:0.7rem;">(Captured Profit Setups)</small>
+                </div>
+            </div>
+
+            <!-- 3. SL Hit Count -->
+            <div class="col-6 col-md-3">
+                <div class="p-3 rounded bg-dark border border-danger h-100">
+                    <small class="text-danger fw-bold d-block text-uppercase" style="font-size:0.75rem;">SL Hit Count</small>
+                    <div id="stat-sl-hits" class="fw-bold text-danger fs-3 mt-1">0</div>
+                    <small class="text-muted d-block" style="font-size:0.7rem;">(Risk Controlled Exits)</small>
+                </div>
+            </div>
+
+            <!-- 4. Active In-Trade Setups -->
+            <div class="col-6 col-md-3">
+                <div class="p-3 rounded bg-dark border border-warning h-100">
+                    <small class="text-warning fw-bold d-block text-uppercase" style="font-size:0.75rem;">Active Trades</small>
+                    <div class="d-flex justify-content-center align-items-center gap-2 mt-1">
+                        <span id="stat-active-trades" class="fw-bold text-warning fs-3">0</span>
+                        <span class="badge bg-warning text-dark fs-6 font-monospace">LIVE</span>
+                    </div>
+                    <small class="text-muted d-block" style="font-size:0.7rem;">(Awaiting Target or SL)</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Audit Table Container -->
+        <div class="table-responsive" style="max-height: 480px; overflow-y: auto;">
+            <table class="table table-dark table-hover table-bordered table-dark-custom align-middle m-0" id="audit-table">
+                <thead>
+                    <tr>
+                        <th style="width: 140px;"><i class="fa-regular fa-clock me-1"></i>Time (IST)</th>
+                        <th style="width: 75px;">Asset</th>
+                        <th style="width: 180px;">Setup Type</th>
+                        <th>Entry Price</th>
+                        <th>Target (Next Strike Div)</th>
+                        <th>Stop Loss (SL)</th>
+                        <th style="width: 190px;">Final Outcome</th>
+                        <th style="width: 160px;">Exit Time / Duration</th>
+                        <th>Strategy Context / Notes</th>
+                    </tr>
+                </thead>
+                <tbody id="audit-table-body">
+                    <tr><td colspan="9" class="text-center py-4 text-muted"><i class="fa-solid fa-spinner fa-spin me-2"></i>Loading trade audit log history...</td></tr>
+                </tbody>
+            </table>
+        </div>
     </div>
 </div>
 
@@ -1533,6 +1694,7 @@ def serve_dashboard():
 
                 startTimer();
                 await loadTimeTravelSnapshots();
+                loadTradeAuditData();
             }
         } catch (err) {
             console.error("Error fetching option chain:", err);
@@ -1871,6 +2033,118 @@ def serve_dashboard():
         else fetchOptionChainData();
     });
 
+    // -----------------------------------------------------------------
+    // AUTOMATED TRADE AUDIT & PERFORMANCE TRACKER JAVASCRIPT ENGINE
+    // -----------------------------------------------------------------
+    let auditDateOptionsLoaded = false;
+
+    async function loadTradeAuditData(forceSync = false) {
+        try {
+            const dateSelect = document.getElementById("audit-date-filter");
+            const assetSelect = document.getElementById("audit-asset-filter");
+            const dateVal = dateSelect ? dateSelect.value : "ALL";
+            const assetVal = assetSelect ? assetSelect.value : "ALL";
+
+            if (forceSync) {
+                const syncBtn = document.getElementById("btn-sync-audit");
+                if (syncBtn) syncBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin me-1"></i> Checking...';
+                await fetch(`/api/trade-audit/trigger-check?asset=${encodeURIComponent(assetVal === 'ALL' ? '' : assetVal)}`);
+                if (syncBtn) syncBtn.innerHTML = '<i class="fa-solid fa-arrows-rotate me-1"></i> Sync & Check Now';
+            }
+
+            const url = `/api/trade-audit?date=${encodeURIComponent(dateVal)}&asset=${encodeURIComponent(assetVal)}&evaluate_now=true`;
+            const res = await fetch(url);
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.status !== "success") return;
+
+            // 1. Update Summary Counters
+            const summary = data.summary || {};
+            if (document.getElementById("stat-total-setups")) {
+                document.getElementById("stat-total-setups").innerText = summary.total_setups || 0;
+            }
+            if (document.getElementById("stat-target-hits")) {
+                document.getElementById("stat-target-hits").innerText = summary.target_hits || 0;
+            }
+            if (document.getElementById("stat-sl-hits")) {
+                document.getElementById("stat-sl-hits").innerText = summary.sl_hits || 0;
+            }
+            if (document.getElementById("stat-active-trades")) {
+                document.getElementById("stat-active-trades").innerText = summary.active_trades || 0;
+            }
+            if (document.getElementById("stat-win-rate")) {
+                const winRate = summary.win_rate_pct || 0;
+                document.getElementById("stat-win-rate").innerText = `${winRate}% Win Rate`;
+                document.getElementById("stat-win-rate").className = winRate >= 60 ? "badge bg-success fs-6" : (winRate >= 40 ? "badge bg-warning text-dark fs-6" : "badge bg-danger fs-6");
+            }
+
+            // 2. Populate Date Filter Dropdown once or when dates change
+            if (dateSelect && (!auditDateOptionsLoaded || dateSelect.options.length <= 1) && data.dates && data.dates.length > 0) {
+                const currentVal = dateSelect.value;
+                dateSelect.innerHTML = '<option value="ALL">📅 All Dates</option>';
+                data.dates.forEach(d => {
+                    const opt = document.createElement("option");
+                    opt.value = d;
+                    opt.innerText = d;
+                    dateSelect.appendChild(opt);
+                });
+                dateSelect.value = currentVal;
+                auditDateOptionsLoaded = true;
+            }
+
+            // 3. Render Audit Table Rows
+            const tbody = document.getElementById("audit-table-body");
+            if (!tbody) return;
+
+            const trades = data.trades || [];
+            if (trades.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-4 text-muted"><i class="fa-solid fa-inbox me-2 fs-5"></i>Koi trade setup log nahi mila is filter ke anusaar.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = "";
+            trades.forEach(t => {
+                const tr = document.createElement("tr");
+
+                const isBullish = (t.setup_type || "").includes("Bullish");
+                const setupBadge = isBullish 
+                    ? '<span class="badge bg-success-subtle text-success border border-success px-2 py-1"><i class="fa-solid fa-arrow-trend-up me-1"></i>EOS Bullish Reversal</span>'
+                    : '<span class="badge bg-danger-subtle text-danger border border-danger px-2 py-1"><i class="fa-solid fa-arrow-trend-down me-1"></i>EOR Bearish Reversal</span>';
+
+                const assetBadge = t.asset === "BTC" 
+                    ? '<span class="badge bg-warning text-dark fw-bold"><i class="fa-brands fa-bitcoin me-1"></i>BTC</span>'
+                    : '<span class="badge bg-info text-dark fw-bold"><i class="fa-brands fa-ethereum me-1"></i>ETH</span>';
+
+                tr.innerHTML = `
+                    <td class="small font-monospace text-light">${t.timestamp}</td>
+                    <td class="text-center">${assetBadge}</td>
+                    <td>${setupBadge}</td>
+                    <td class="fw-bold text-info">${Number(t.entry_level).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="fw-bold text-success">${Number(t.target_price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td class="fw-bold text-danger">${Number(t.sl_price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
+                    <td><span class="badge ${t.badge_class} p-2 px-3 fw-bold">${t.outcome_text}</span></td>
+                    <td class="small text-muted font-monospace">${t.duration_text}</td>
+                    <td class="small text-secondary text-truncate" style="max-width: 220px;" title="${t.notes || ''}">${t.notes || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+        } catch (err) {
+            console.warn("Failed to load trade audit data:", err);
+        }
+    }
+
+    // Trade Audit Event Listeners
+    if (document.getElementById("audit-date-filter")) {
+        document.getElementById("audit-date-filter").addEventListener("change", () => loadTradeAuditData());
+    }
+    if (document.getElementById("audit-asset-filter")) {
+        document.getElementById("audit-asset-filter").addEventListener("change", () => loadTradeAuditData());
+    }
+    if (document.getElementById("btn-sync-audit")) {
+        document.getElementById("btn-sync-audit").addEventListener("click", () => loadTradeAuditData(true));
+    }
+
     // Initial Load Sequence
     window.addEventListener("DOMContentLoaded", async () => {
         initLightweightChart();
@@ -1879,6 +2153,7 @@ def serve_dashboard():
         fetchOptionChainData();
         startSpotPriceTracker();
         await loadTimeTravelSnapshots();
+        loadTradeAuditData();
     });
 </script>
 
