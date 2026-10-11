@@ -2123,7 +2123,7 @@ def serve_dashboard():
                     <td class="fw-bold text-success">${Number(t.target_price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                     <td class="fw-bold text-danger">${Number(t.sl_price).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</td>
                     <td><span class="badge ${t.badge_class} p-2 px-3 fw-bold">${t.outcome_text}</span></td>
-                    <td class="small text-muted font-monospace">${t.duration_text}</td>
+                    <td class="small font-monospace"><span class="badge bg-dark text-warning border border-secondary px-2 py-1"><i class="fa-regular fa-clock me-1"></i>${t.duration_text}</span></td>
                     <td class="small text-secondary text-truncate" style="max-width: 220px;" title="${t.notes || ''}">${t.notes || '-'}</td>
                 `;
                 tbody.appendChild(tr);
