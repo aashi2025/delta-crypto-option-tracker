@@ -84,10 +84,34 @@ class OptionChainDB:
                 )
             """)
 
+            # Table 3: Automated Trade Audit & Performance Tracker Log
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS trade_audit_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp TEXT NOT NULL,
+                    date TEXT NOT NULL,
+                    asset TEXT NOT NULL,
+                    setup_type TEXT NOT NULL,
+                    trigger_price REAL NOT NULL,
+                    entry_level REAL NOT NULL,
+                    target_price REAL NOT NULL,
+                    sl_price REAL NOT NULL,
+                    status TEXT NOT NULL,
+                    exit_time TEXT,
+                    points_captured REAL DEFAULT 0,
+                    loss_points REAL DEFAULT 0,
+                    duration_minutes REAL DEFAULT 0,
+                    notes TEXT
+                )
+            """)
+
             # Indexes for fast querying
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON option_chain_snapshots (timestamp);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_snapshot_id ON option_chain_snapshots (snapshot_id);")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_coa_snapshot ON coa_analysis_snapshots (snapshot_id);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_date ON trade_audit_log (date);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_status ON trade_audit_log (status);")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_asset ON trade_audit_log (asset);")
 
             # Safely add missing columns to existing DB if needed
             for col in ["call_diversion", "put_diversion"]:
@@ -355,5 +379,158 @@ class OptionChainDB:
                 "instrument_key": instrument_key
             }
             return records, meta
+
+    def insert_trade_audit(
+        self,
+        timestamp: str,
+        asset: str,
+        setup_type: str,
+        trigger_price: float,
+        entry_level: float,
+        target_price: float,
+        sl_price: float,
+        status: str = "ACTIVE",
+        notes: str = ""
+    ) -> int:
+        """Inserts a new trade setup record into trade_audit_log."""
+        date_str = timestamp.split(" ")[0] if " " in timestamp else datetime.now().strftime("%Y-%m-%d")
+        query = """
+            INSERT INTO trade_audit_log (
+                timestamp, date, asset, setup_type, trigger_price, entry_level,
+                target_price, sl_price, status, points_captured, loss_points, duration_minutes, notes
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0.0, 0.0, 0.0, ?)
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query, (
+                timestamp, date_str, asset.upper(), setup_type,
+                trigger_price, entry_level, target_price, sl_price, status, notes
+            ))
+            conn.commit()
+            return cursor.lastrowid
+
+    def update_trade_outcome(
+        self,
+        trade_id: int,
+        status: str,
+        exit_time: str,
+        points_captured: float = 0.0,
+        loss_points: float = 0.0,
+        duration_minutes: float = 0.0,
+        notes: Optional[str] = None
+    ):
+        """Updates trade status to 'TARGET HIT ✅' or 'SL HIT ❌' with exit details."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            if notes is not None:
+                cursor.execute("""
+                    UPDATE trade_audit_log
+                    SET status = ?, exit_time = ?, points_captured = ?, loss_points = ?, duration_minutes = ?, notes = ?
+                    WHERE id = ?
+                """, (status, exit_time, points_captured, loss_points, duration_minutes, notes, trade_id))
+            else:
+                cursor.execute("""
+                    UPDATE trade_audit_log
+                    SET status = ?, exit_time = ?, points_captured = ?, loss_points = ?, duration_minutes = ?
+                    WHERE id = ?
+                """, (status, exit_time, points_captured, loss_points, duration_minutes, trade_id))
+            conn.commit()
+
+    def get_active_trades(self, asset: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Fetches all currently ACTIVE trades."""
+        query = "SELECT * FROM trade_audit_log WHERE status = 'ACTIVE'"
+        params = []
+        if asset and asset.upper() != "ALL":
+            query += " AND asset = ?"
+            params.append(asset.upper())
+        query += " ORDER BY id ASC"
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    def get_last_trade_for_setup(self, asset: str, setup_type: str) -> Optional[Dict[str, Any]]:
+        """Fetches most recent trade for this asset & setup_type for debounce/cooldown check."""
+        query = """
+            SELECT * FROM trade_audit_log
+            WHERE asset = ? AND setup_type = ?
+            ORDER BY id DESC
+            LIMIT 1
+        """
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(query, (asset.upper(), setup_type))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_trade_audit_log(self, date_filter: Optional[str] = None, asset: Optional[str] = None, limit: int = 200) -> List[Dict[str, Any]]:
+        """Fetches trade audit log records with optional date and asset filters."""
+        query = "SELECT * FROM trade_audit_log WHERE 1=1"
+        params = []
+        if date_filter and date_filter.upper() != "ALL":
+            query += " AND date = ?"
+            params.append(date_filter)
+        if asset and asset.upper() != "ALL":
+            query += " AND asset = ?"
+            params.append(asset.upper())
+        query += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    def get_audit_dates(self) -> List[str]:
+        """Returns sorted list of distinct dates present in trade audit log."""
+        query = "SELECT DISTINCT date FROM trade_audit_log ORDER BY date DESC"
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            return [r[0] for r in rows if r[0]]
+
+    def get_audit_stats(self, date_filter: Optional[str] = None, asset: Optional[str] = None) -> Dict[str, Any]:
+        """Calculates Top Summary Counters (Total Setups, Target Hits, SL Hits, Active, Success Rate %)."""
+        query = "SELECT status, points_captured, loss_points FROM trade_audit_log WHERE 1=1"
+        params = []
+        if date_filter and date_filter.upper() != "ALL":
+            query += " AND date = ?"
+            params.append(date_filter)
+        if asset and asset.upper() != "ALL":
+            query += " AND asset = ?"
+            params.append(asset.upper())
+
+        with self._get_connection() as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+
+        total = len(rows)
+        target_hits = sum(1 for r in rows if "TARGET HIT" in r["status"])
+        sl_hits = sum(1 for r in rows if "SL HIT" in r["status"])
+        active = sum(1 for r in rows if r["status"] == "ACTIVE")
+        closed = target_hits + sl_hits
+        win_rate = round((target_hits / closed * 100.0), 1) if closed > 0 else 0.0
+        total_profit_pts = round(sum(r["points_captured"] or 0.0 for r in rows), 2)
+        total_loss_pts = round(sum(r["loss_points"] or 0.0 for r in rows), 2)
+
+        return {
+            "total_setups": total,
+            "target_hits": target_hits,
+            "sl_hits": sl_hits,
+            "active_trades": active,
+            "win_rate_pct": win_rate,
+            "total_profit_points": total_profit_pts,
+            "total_loss_points": total_loss_pts
+        }
+
 
 
