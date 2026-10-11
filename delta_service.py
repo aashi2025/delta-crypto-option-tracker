@@ -1,8 +1,10 @@
 import os
 import time
 import requests
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Tuple, Optional
+
+IST = timezone(timedelta(hours=5, minutes=30))
 
 class DeltaExchangeService:
     """
@@ -159,10 +161,11 @@ class DeltaExchangeService:
                 rec["put_oi_change"] = oi_change
                 rec["put_iv"] = iv
 
-        now_ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        snap_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+        now_dt = datetime.now(timezone.utc).astimezone(IST)
+        now_ts = now_dt.strftime("%Y-%m-%d %H:%M:%S")
+        snap_id = now_dt.strftime("%Y%m%d_%H%M%S")
         inst_key = f"DELTA_{symbol_prefix}"
-        exp_final = target_expiry or datetime.now().strftime("%Y-%m-%d")
+        exp_final = target_expiry or now_dt.strftime("%Y-%m-%d")
 
         records = sorted(list(strikes_map.values()), key=lambda x: x["strike_price"])
         for r in records:
