@@ -2,16 +2,37 @@ import os
 import sys
 import time
 import threading
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 import requests
 
+# Fix UTF-8 output on Windows console
 if sys.platform == "win32":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
         sys.stderr.reconfigure(encoding="utf-8")
     except Exception:
         pass
+
+# Strict Indian Standard Time (IST = UTC+05:30) Definition
+IST = timezone(timedelta(hours=5, minutes=30))
+
+def get_ist_now() -> datetime:
+    """Returns current datetime strictly in Indian Standard Time (IST, UTC+5:30)."""
+    return datetime.now(timezone.utc).astimezone(IST)
+
+def get_ist_str() -> str:
+    """Returns current timestamp string formatted as 'YYYY-MM-DD HH:MM:SS' strictly in IST."""
+    return get_ist_now().strftime("%Y-%m-%d %H:%M:%S")
+
+def get_ist_date_str() -> str:
+    """Returns current date string formatted as 'YYYY-MM-DD' strictly in IST."""
+    return get_ist_now().strftime("%Y-%m-%d")
+
+def unix_to_ist_str(unix_ts: int) -> str:
+    """Converts a Unix timestamp (seconds) to a formatted string strictly in IST."""
+    return datetime.fromtimestamp(unix_ts, tz=timezone.utc).astimezone(IST).strftime("%Y-%m-%d %H:%M:%S")
+
 
 class TradeAuditEngine:
     """
@@ -21,7 +42,8 @@ class TradeAuditEngine:
     2. SQLite Database Trade Logging (trade_audit_log).
     3. Outcome Evaluation Engine (Target vs SL Candle Evaluation via Delta Exchange Historical OHLC).
     4. Debounce / Cooldown filter to prevent duplicate entries.
-    5. Automatic Historical Reconciliation & Dashboard Summarizer.
+    5. Strict IST TimeZone synchronization across all serverless and VPS environments.
+    6. Exact Delta Exchange index symbol tracking (.DEXBTUSD for BTC, .DEETHUSD for ETH).
     """
 
     def __init__(
@@ -62,7 +84,6 @@ class TradeAuditEngine:
 
     def _background_loop(self, interval_seconds: int):
         """Continuous background thread evaluating setups and active trades for BTC and ETH."""
-        # Initial wait to let server start up
         time.sleep(3)
         while self.running:
             try:
@@ -70,7 +91,6 @@ class TradeAuditEngine:
             except Exception as e:
                 print(f"[WARNING] TradeAuditEngine worker cycle error: {e}")
 
-            # Sleep in 1-second chunks for responsive shutdown
             for _ in range(interval_seconds):
                 if not self.running:
                     break
@@ -125,7 +145,6 @@ class TradeAuditEngine:
             elif eor_price > entry_level:
                 target_price = round(eor_price, 2)
             else:
-                # Fallback: standard 0.8% - 1.2% diversion target
                 target_price = round(entry_level * 1.01, 2)
 
             # SL: US level (Ultimate Support) if below EOS, else 0.5% below EOS
@@ -134,7 +153,7 @@ class TradeAuditEngine:
             else:
                 sl_price = round(entry_level * 0.995, 2)
 
-            # Guarantee: sl_price < entry_level < target_price
+            # Safeguards
             if sl_price >= entry_level:
                 sl_price = round(entry_level * 0.995, 2)
             if target_price <= entry_level:
@@ -161,7 +180,6 @@ class TradeAuditEngine:
             elif eos_price > 0 and eos_price < entry_level:
                 target_price = round(eos_price, 2)
             else:
-                # Fallback: standard 0.8% - 1.2% diversion target
                 target_price = round(entry_level * 0.99, 2)
 
             # SL: UR level (Upper Resistance) if above EOR, else 0.5% above EOR
@@ -170,7 +188,7 @@ class TradeAuditEngine:
             else:
                 sl_price = round(entry_level * 1.005, 2)
 
-            # Guarantee: target_price < entry_level < sl_price
+            # Safeguards
             if sl_price <= entry_level:
                 sl_price = round(entry_level * 1.005, 2)
             if target_price >= entry_level:
@@ -193,8 +211,8 @@ class TradeAuditEngine:
         if last_trade:
             ts_str = last_trade.get("timestamp", "")
             try:
-                dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
-                elapsed_min = (datetime.now() - dt).total_seconds() / 60.0
+                dt = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=IST)
+                elapsed_min = (get_ist_now() - dt).total_seconds() / 60.0
                 if elapsed_min < self.cooldown_minutes:
                     return True # In cooldown period
             except Exception:
@@ -204,7 +222,7 @@ class TradeAuditEngine:
 
     def check_and_trigger_setups(self, asset: str = "BTC") -> List[Dict[str, Any]]:
         """
-        Background Level Trigger Engine:
+        Background Level Trigger Engine (STRICT IST TIME):
         1. Bullish Setup Trigger:
            - Spot Price at EOS within 0.3% buffer: abs(spot - eos) / eos <= 0.003
            - Support is "Strong" (no downward WTB, no SOC)
@@ -246,14 +264,14 @@ class TradeAuditEngine:
         us_price = float(us_info.get("us_price") or 0.0)
         records_with_reversals = analysis.get("records_with_reversals", records)
 
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        # STRICT IST Current Time (Fixed for Vercel Serverless)
+        now_str = get_ist_str()
 
         # -------------------------------------------------------------
         # 1. BULLISH SETUP TRIGGER CHECK (EOS Reversal)
         # -------------------------------------------------------------
         if eos_price > 0 and not soc_detected:
             eos_diff_pct = abs(spot - eos_price) / eos_price
-            # Buffer check: within 0.3% range, AND Support is Strong (no downward WTB)
             if eos_diff_pct <= self.buffer_pct and supp_status == "STRONG":
                 setup_type = "EOS Bullish Reversal"
                 if not self.is_setup_debounced(symbol_prefix, setup_type):
@@ -285,14 +303,13 @@ class TradeAuditEngine:
                         "status": "ACTIVE"
                     }
                     triggered.append(log_item)
-                    print(f"[AUDIT TRIGGER] 🟢 Bullish Setup Logged: {symbol_prefix} @ {spot:,.2f} (Target: {target:,.2f}, SL: {sl:,.2f})")
+                    print(f"[AUDIT TRIGGER] 🟢 Bullish Setup Logged ({now_str} IST): {symbol_prefix} @ {spot:,.2f} (Target: {target:,.2f}, SL: {sl:,.2f})")
 
         # -------------------------------------------------------------
         # 2. BEARISH SETUP TRIGGER CHECK (EOR Reversal)
         # -------------------------------------------------------------
         if eor_price > 0 and not soc_detected:
             eor_diff_pct = abs(spot - eor_price) / eor_price
-            # Buffer check: within 0.3% range, AND Resistance is Strong (no upward WTT)
             if eor_diff_pct <= self.buffer_pct and res_status == "STRONG":
                 setup_type = "EOR Bearish Reversal"
                 if not self.is_setup_debounced(symbol_prefix, setup_type):
@@ -324,25 +341,26 @@ class TradeAuditEngine:
                         "status": "ACTIVE"
                     }
                     triggered.append(log_item)
-                    print(f"[AUDIT TRIGGER] 🔴 Bearish Setup Logged: {symbol_prefix} @ {spot:,.2f} (Target: {target:,.2f}, SL: {sl:,.2f})")
+                    print(f"[AUDIT TRIGGER] 🔴 Bearish Setup Logged ({now_str} IST): {symbol_prefix} @ {spot:,.2f} (Target: {target:,.2f}, SL: {sl:,.2f})")
 
         return triggered
 
     def get_delta_chart_symbol(self, asset: str) -> str:
+        """Exact underlying index ticker symbol on Delta Exchange India."""
         asset_u = asset.upper()
         if asset_u == "BTC":
             return ".DEXBTUSD"
         elif asset_u == "ETH":
-            return "ETHUSDT"
+            return ".DEETHUSD"
         elif asset_u == "SOL":
-            return "SOLUSDT"
-        return f"{asset_u}USDT"
+            return ".DESOLUSD"
+        return f".DE{asset_u}USD"
 
     def fetch_delta_candles(self, asset: str, from_ts: int, to_ts: int, resolution: str = "5") -> List[Dict[str, Any]]:
         """
         Fetches historical OHLC candles from Delta Exchange REST API:
         https://api.delta.exchange/v2/chart/history
-        Uses exact underlying index (.DEXBTUSD for BTC, ETHUSDT for ETH).
+        Uses exact underlying index (.DEXBTUSD for BTC, .DEETHUSD for ETH).
         Returns sorted chronological candles list: [{'t', 'o', 'h', 'l', 'c', 'v'}, ...]
         """
         url = f"{self.service.base_url}/v2/chart/history"
@@ -389,7 +407,7 @@ class TradeAuditEngine:
     def evaluate_active_trades(self, asset: Optional[str] = None):
         """
         OUTCOME EVALUATION ENGINE:
-        Monitors incoming price candles for every ACTIVE trade:
+        Monitors incoming price candles for every ACTIVE trade (strictly in IST):
         - Bullish Trade:
           * High >= Target -> TARGET HIT ✅ (points_captured = target - entry)
           * Low <= SL -> SL HIT ❌ (loss_points = entry - sl)
@@ -402,9 +420,8 @@ class TradeAuditEngine:
             return
 
         now_unix = int(time.time())
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = get_ist_str()
 
-        # Get latest spot price for live check
         spot_map = {}
 
         for trade in active_trades:
@@ -416,10 +433,10 @@ class TradeAuditEngine:
             sl_price = trade["sl_price"]
             ts_str = trade["timestamp"]
 
-            # Parse entry timestamp
-            entry_unix = now_unix - 3600 # fallback
+            # Parse entry timestamp with IST awareness
+            entry_unix = now_unix - 3600
             try:
-                dt_entry = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S")
+                dt_entry = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=IST)
                 entry_unix = int(dt_entry.timestamp())
             except Exception:
                 pass
@@ -438,12 +455,12 @@ class TradeAuditEngine:
                 if c_time < entry_unix:
                     continue
 
-                c_time_str = datetime.fromtimestamp(c_time).strftime("%Y-%m-%d %H:%M:%S")
+                # Format candle time in exact IST
+                c_time_str = unix_to_ist_str(c_time)
                 duration_min = round(max(1.0, (c_time - entry_unix) / 60.0), 1)
 
                 if setup_type == "EOS Bullish Reversal":
                     if c_high >= target_price:
-                        # Target Hit
                         pts = round(target_price - entry_level, 2)
                         self.db.update_trade_outcome(
                             trade_id=t_id,
@@ -455,10 +472,9 @@ class TradeAuditEngine:
                             notes=f"Target reached on 5m candle @ High {c_high:,.2f}"
                         )
                         resolved = True
-                        print(f"[AUDIT RESOLVED] 🎯 Trade #{t_id} {trade_asset} TARGET HIT: +{pts:,.2f} pts in {duration_min} min")
+                        print(f"[AUDIT RESOLVED] 🎯 Trade #{t_id} {trade_asset} TARGET HIT ({c_time_str} IST): +{pts:,.2f} pts in {duration_min} min")
                         break
                     elif c_low <= sl_price:
-                        # SL Hit
                         loss_pts = round(entry_level - sl_price, 2)
                         self.db.update_trade_outcome(
                             trade_id=t_id,
@@ -470,12 +486,11 @@ class TradeAuditEngine:
                             notes=f"SL breached on 5m candle @ Low {c_low:,.2f}"
                         )
                         resolved = True
-                        print(f"[AUDIT RESOLVED] ❌ Trade #{t_id} {trade_asset} SL HIT: -{loss_pts:,.2f} pts in {duration_min} min")
+                        print(f"[AUDIT RESOLVED] ❌ Trade #{t_id} {trade_asset} SL HIT ({c_time_str} IST): -{loss_pts:,.2f} pts in {duration_min} min")
                         break
 
                 elif setup_type == "EOR Bearish Reversal":
                     if c_low <= target_price:
-                        # Target Hit
                         pts = round(entry_level - target_price, 2)
                         self.db.update_trade_outcome(
                             trade_id=t_id,
@@ -487,10 +502,9 @@ class TradeAuditEngine:
                             notes=f"Target reached on 5m candle @ Low {c_low:,.2f}"
                         )
                         resolved = True
-                        print(f"[AUDIT RESOLVED] 🎯 Trade #{t_id} {trade_asset} TARGET HIT: +{pts:,.2f} pts in {duration_min} min")
+                        print(f"[AUDIT RESOLVED] 🎯 Trade #{t_id} {trade_asset} TARGET HIT ({c_time_str} IST): +{pts:,.2f} pts in {duration_min} min")
                         break
                     elif c_high >= sl_price:
-                        # SL Hit
                         loss_pts = round(sl_price - entry_level, 2)
                         self.db.update_trade_outcome(
                             trade_id=t_id,
@@ -502,10 +516,10 @@ class TradeAuditEngine:
                             notes=f"SL breached on 5m candle @ High {c_high:,.2f}"
                         )
                         resolved = True
-                        print(f"[AUDIT RESOLVED] ❌ Trade #{t_id} {trade_asset} SL HIT: -{loss_pts:,.2f} pts in {duration_min} min")
+                        print(f"[AUDIT RESOLVED] ❌ Trade #{t_id} {trade_asset} SL HIT ({c_time_str} IST): -{loss_pts:,.2f} pts in {duration_min} min")
                         break
 
-            # 2. Live Spot Fallback Check if candles haven't updated yet
+            # 2. Live Spot Fallback Check
             if not resolved:
                 if trade_asset not in spot_map:
                     try:
@@ -534,102 +548,22 @@ class TradeAuditEngine:
 
     def seed_historical_audit_records_if_empty(self):
         """
-        Seeds initial realistic trade audit logs for current and recent dates if database has 0 records,
-        or reconciles from coa_analysis_snapshots so that when user opens the page for the first time,
-        they immediately see the full working Trade Audit table, counters, date filters, and outcomes!
+        No-op: Does NOT inject mock or fake data.
+        Ensures 100% of recorded trades are authentic live-market triggers matching Delta Exchange charts.
         """
-        existing = self.db.get_trade_audit_log(limit=5)
-        if len(existing) > 0:
-            return # Already populated
-
-        today_str = datetime.now().strftime("%Y-%m-%d")
-        
-        # Historical setups based on actual market levels
-        sample_setups = [
-            {
-                "timestamp": f"{today_str} 09:45:00",
-                "asset": "BTC",
-                "setup_type": "EOS Bullish Reversal",
-                "trigger_price": 82950.0,
-                "entry_level": 82920.0,
-                "target_price": 83780.0,
-                "sl_price": 82510.0,
-                "status": "TARGET HIT ✅",
-                "exit_time": f"{today_str} 11:20:00",
-                "points_captured": 860.0,
-                "loss_points": 0.0,
-                "duration_minutes": 95.0,
-                "notes": "Support Strong @ 83000 | Clean Reversal from EOS"
-            },
-            {
-                "timestamp": f"{today_str} 12:15:00",
-                "asset": "ETH",
-                "setup_type": "EOR Bearish Reversal",
-                "trigger_price": 2548.5,
-                "entry_level": 2550.0,
-                "target_price": 2515.0,
-                "sl_price": 2568.0,
-                "status": "TARGET HIT ✅",
-                "exit_time": f"{today_str} 13:40:00",
-                "points_captured": 35.0,
-                "loss_points": 0.0,
-                "duration_minutes": 85.0,
-                "notes": "Resistance Strong @ 2550 | Target Hit @ S-1 Diversion"
-            },
-            {
-                "timestamp": f"{today_str} 17:10:00",
-                "asset": "ETH",
-                "setup_type": "EOS Bullish Reversal",
-                "trigger_price": 2482.0,
-                "entry_level": 2480.0,
-                "target_price": 2515.0,
-                "sl_price": 2462.0,
-                "status": "SL HIT ❌",
-                "exit_time": f"{today_str} 17:55:00",
-                "points_captured": 0.0,
-                "loss_points": 18.0,
-                "duration_minutes": 45.0,
-                "notes": "Support Breakdown during sudden market volatility"
-            }
-        ]
-
-        for s in sample_setups:
-            t_id = self.db.insert_trade_audit(
-                timestamp=s["timestamp"],
-                asset=s["asset"],
-                setup_type=s["setup_type"],
-                trigger_price=s["trigger_price"],
-                entry_level=s["entry_level"],
-                target_price=s["target_price"],
-                sl_price=s["sl_price"],
-                status=s["status"],
-                notes=s["notes"]
-            )
-            if s["status"] != "ACTIVE":
-                self.db.update_trade_outcome(
-                    trade_id=t_id,
-                    status=s["status"],
-                    exit_time=s["exit_time"],
-                    points_captured=s["points_captured"],
-                    loss_points=s["loss_points"],
-                    duration_minutes=s["duration_minutes"],
-                    notes=s["notes"]
-                )
-
-        print(f"[INFO] 📋 Initial trade audit historical records seeded successfully ({len(sample_setups)} setups).")
+        pass
 
     def get_dashboard_audit_data(self, date_filter: Optional[str] = None, asset: Optional[str] = None) -> Dict[str, Any]:
         """
         Prepares complete response payload for frontend Trade Audit UI:
         - Summary Statistics
         - Available dates for filter dropdown
-        - Detailed trade audit log records
+        - Detailed trade audit log records with clear visual badges
         """
         stats = self.db.get_audit_stats(date_filter=date_filter, asset=asset)
         dates = self.db.get_audit_dates()
         records = self.db.get_trade_audit_log(date_filter=date_filter, asset=asset, limit=200)
 
-        # Enhance records with visual badges and formatting
         enhanced_trades = []
         for r in records:
             status = r.get("status", "ACTIVE")
@@ -652,7 +586,8 @@ class TradeAuditEngine:
             if is_active:
                 dur_text = "In Progress ⏱️"
             elif dur_min > 0:
-                dur_text = f"{exit_time.split(' ')[-1] if ' ' in exit_time else exit_time} ({int(dur_min)} min)"
+                time_only = exit_time.split(" ")[-1] if " " in exit_time else exit_time
+                dur_text = f"{time_only} ({int(dur_min)} min)"
             else:
                 dur_text = exit_time
 
