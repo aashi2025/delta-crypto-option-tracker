@@ -328,48 +328,63 @@ class TradeAuditEngine:
 
         return triggered
 
+    def get_delta_chart_symbol(self, asset: str) -> str:
+        asset_u = asset.upper()
+        if asset_u == "BTC":
+            return ".DEXBTUSD"
+        elif asset_u == "ETH":
+            return "ETHUSDT"
+        elif asset_u == "SOL":
+            return "SOLUSDT"
+        return f"{asset_u}USDT"
+
     def fetch_delta_candles(self, asset: str, from_ts: int, to_ts: int, resolution: str = "5") -> List[Dict[str, Any]]:
         """
         Fetches historical OHLC candles from Delta Exchange REST API:
         https://api.delta.exchange/v2/chart/history
+        Uses exact underlying index (.DEXBTUSD for BTC, ETHUSDT for ETH).
         Returns sorted chronological candles list: [{'t', 'o', 'h', 'l', 'c', 'v'}, ...]
         """
         url = f"{self.service.base_url}/v2/chart/history"
-        symbol = f"{asset.upper()}USD"
-        params = {
-            "symbol": symbol,
-            "resolution": resolution,
-            "from": from_ts,
-            "to": to_ts
-        }
-        candles = []
-        try:
-            r = requests.get(url, params=params, headers=self.service._get_headers(), timeout=8)
-            if r.status_code == 200:
-                res = r.json().get("result", {})
-                t_arr = res.get("t", [])
-                o_arr = res.get("o", [])
-                h_arr = res.get("h", [])
-                l_arr = res.get("l", [])
-                c_arr = res.get("c", [])
-                v_arr = res.get("v", [])
+        primary_sym = self.get_delta_chart_symbol(asset)
+        symbols_to_try = [primary_sym, f"{asset.upper()}USDT", f"{asset.upper()}USD"]
 
-                for i in range(len(t_arr)):
-                    candles.append({
-                        "t": t_arr[i],
-                        "o": float(o_arr[i]),
-                        "h": float(h_arr[i]),
-                        "l": float(l_arr[i]),
-                        "c": float(c_arr[i]),
-                        "v": float(v_arr[i]) if i < len(v_arr) else 0.0
-                    })
+        for sym in symbols_to_try:
+            params = {
+                "symbol": sym,
+                "resolution": resolution,
+                "from": from_ts,
+                "to": to_ts
+            }
+            try:
+                r = requests.get(url, params=params, headers=self.service._get_headers(), timeout=8)
+                if r.status_code == 200:
+                    res = r.json().get("result", {})
+                    t_arr = res.get("t", [])
+                    o_arr = res.get("o", [])
+                    h_arr = res.get("h", [])
+                    l_arr = res.get("l", [])
+                    c_arr = res.get("c", [])
+                    v_arr = res.get("v", [])
 
-                # Sort chronologically (oldest to newest)
-                candles.sort(key=lambda x: x["t"])
-        except Exception as e:
-            print(f"[WARNING] Failed to fetch Delta candles for {asset}: {e}")
+                    if len(t_arr) > 0 and len(c_arr) > 0:
+                        candles = []
+                        for i in range(len(t_arr)):
+                            candles.append({
+                                "t": t_arr[i],
+                                "o": float(o_arr[i]),
+                                "h": float(h_arr[i]),
+                                "l": float(l_arr[i]),
+                                "c": float(c_arr[i]),
+                                "v": float(v_arr[i]) if i < len(v_arr) else 0.0
+                            })
+                        # Sort chronologically (oldest to newest)
+                        candles.sort(key=lambda x: x["t"])
+                        return candles
+            except Exception as e:
+                print(f"[WARNING] Failed to fetch Delta candles for {asset} with {sym}: {e}")
 
-        return candles
+        return []
 
     def evaluate_active_trades(self, asset: Optional[str] = None):
         """
@@ -560,21 +575,6 @@ class TradeAuditEngine:
                 "loss_points": 0.0,
                 "duration_minutes": 85.0,
                 "notes": "Resistance Strong @ 2550 | Target Hit @ S-1 Diversion"
-            },
-            {
-                "timestamp": f"{today_str} 14:30:00",
-                "asset": "BTC",
-                "setup_type": "EOR Bearish Reversal",
-                "trigger_price": 85040.0,
-                "entry_level": 85020.0,
-                "target_price": 84250.0,
-                "sl_price": 85450.0,
-                "status": "TARGET HIT ✅",
-                "exit_time": f"{today_str} 16:05:00",
-                "points_captured": 770.0,
-                "loss_points": 0.0,
-                "duration_minutes": 95.0,
-                "notes": "Resistance Strong @ 85000 | Sharp Reversal to EOS"
             },
             {
                 "timestamp": f"{today_str} 17:10:00",
