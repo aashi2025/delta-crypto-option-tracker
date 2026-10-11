@@ -12,7 +12,7 @@ from delta_service import DeltaExchangeService
 from database import OptionChainDB
 from calculation_engine import OptionChainCalculationEngine
 from alert_engine import OptionChainAlertEngine
-from trade_audit_engine import TradeAuditEngine
+from trade_audit_engine import TradeAuditEngine, IST, get_ist_str, get_ist_now
 
 # Load environment variables
 load_dotenv()
@@ -85,7 +85,7 @@ def get_spot_price_api(instrument: str = Query(DEFAULT_INSTRUMENT)):
             symbol_prefix = "BTC"
         _, meta = service.fetch_option_chain_snapshot(symbol_prefix=symbol_prefix)
         spot = meta.get("spot_price", 0.0)
-        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = get_ist_str()
         return {"status": "success", "spot_price": spot, "timestamp": now_str}
     except Exception as e:
         return {"status": "error", "spot_price": 0.0, "detail": str(e)}
