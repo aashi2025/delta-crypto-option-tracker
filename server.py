@@ -32,11 +32,16 @@ app = FastAPI(title="Ashish Goswami LTP Calculator Pro - Crypto (Delta Exchange)
 @app.middleware("http")
 async def fix_vercel_routing(request, call_next):
     query_path = request.query_params.get("path")
-    if query_path is not None:
-        target_path = "/" + query_path.lstrip("/")
+    if query_path is not None and query_path.strip() != "":
+        target_path = "/" + query_path.strip().lstrip("/")
         request.scope["path"] = target_path
     elif request.headers.get("x-forwarded-uri"):
-        request.scope["path"] = request.headers.get("x-forwarded-uri").split("?")[0]
+        raw_uri = request.headers.get("x-forwarded-uri")
+        path_only = raw_uri.split("?")[0]
+        if path_only in ["/api/index.py", "/api/index", "/api", "/api/"]:
+            request.scope["path"] = "/"
+        else:
+            request.scope["path"] = path_only
     else:
         p = request.scope.get("path", "")
         if p in ["/api/index.py", "/api/index", "/api", "/api/"]:
@@ -292,8 +297,14 @@ def trigger_trade_audit_check(asset: Optional[str] = Query(None)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/favicon.ico")
+def get_favicon():
+    return JSONResponse(content={}, status_code=204)
+
+
 @app.get("/", response_class=HTMLResponse)
 @app.get("/api/index.py", response_class=HTMLResponse)
+@app.get("/api/index", response_class=HTMLResponse)
 @app.get("/api", response_class=HTMLResponse)
 def serve_dashboard():
     """Serves main web dashboard HTML page with Lightweight Chart IST TimeZone, 9:20 Strict DB Lock, and COA 1.0/2.0 Engine."""

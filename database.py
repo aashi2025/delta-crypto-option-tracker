@@ -6,132 +6,167 @@ from typing import List, Dict, Any, Optional, Tuple
 
 class OptionChainDB:
     def __init__(self, db_path: str = "option_chain_data.db"):
+        self._memory_conn: Optional[sqlite3.Connection] = None
         if os.getenv("VERCEL") or os.getenv("VERCEL_ENV"):
             if not db_path.startswith("/tmp/"):
                 db_path = os.path.join("/tmp", os.path.basename(db_path))
+            try:
+                os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
+            except Exception:
+                db_path = ":memory:"
         self.db_path = db_path
         try:
             self._init_db()
         except Exception as e:
-            print(f"DB init fallback warning: {e}")
+            print(f"DB init fallback warning: {e}. Falling back to in-memory SQLite.")
+            self.db_path = ":memory:"
+            self._memory_conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._init_db_conn(self._memory_conn)
 
     def _get_connection(self):
-        return sqlite3.connect(self.db_path)
+        if self.db_path == ":memory:":
+            if self._memory_conn is None:
+                self._memory_conn = sqlite3.connect(":memory:", check_same_thread=False)
+                self._init_db_conn(self._memory_conn)
+            return self._memory_conn
+        try:
+            db_dir = os.path.dirname(os.path.abspath(self.db_path))
+            if db_dir and not os.path.exists(db_dir):
+                os.makedirs(db_dir, exist_ok=True)
+            return sqlite3.connect(self.db_path, check_same_thread=False)
+        except Exception as e:
+            print(f"[WARNING] Connecting to disk db {self.db_path} failed: {e}. Falling back to in-memory.")
+            if self._memory_conn is None:
+                self._memory_conn = sqlite3.connect(":memory:", check_same_thread=False)
+                self._init_db_conn(self._memory_conn)
+            return self._memory_conn
+
+    def _init_db_conn(self, conn: sqlite3.Connection):
+        """Initializes tables directly on a given connection (for in-memory fallback)."""
+        self._execute_schema(conn)
 
     def _init_db(self):
         """Initialize SQLite database schema and indexes for COA 1.0 Engine."""
+        if self.db_path == ":memory:":
+            if self._memory_conn is None:
+                self._memory_conn = sqlite3.connect(":memory:", check_same_thread=False)
+            self._init_db_conn(self._memory_conn)
+            return
         with self._get_connection() as conn:
-            cursor = conn.cursor()
-            
-            # Table 1: Raw Option Chain Records with Diversion prices
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS option_chain_snapshots (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT NOT NULL,
-                    snapshot_id TEXT NOT NULL,
-                    instrument_key TEXT NOT NULL,
-                    expiry_date TEXT NOT NULL,
-                    spot_price REAL,
-                    strike_price REAL NOT NULL,
-                    call_ltp REAL,
-                    call_volume INTEGER,
-                    call_oi REAL,
-                    call_oi_change REAL,
-                    call_bid_price REAL,
-                    call_bid_qty INTEGER,
-                    call_ask_price REAL,
-                    call_ask_qty INTEGER,
-                    call_iv REAL,
-                    call_diversion REAL,
-                    put_ltp REAL,
-                    put_volume INTEGER,
-                    put_oi REAL,
-                    put_oi_change REAL,
-                    put_bid_price REAL,
-                    put_bid_qty INTEGER,
-                    put_ask_price REAL,
-                    put_ask_qty INTEGER,
-                    put_iv REAL,
-                    put_diversion REAL
-                )
-            """)
+            self._execute_schema(conn)
 
-            # Table 2: COA 1.0 Analysis Snapshots Summary with UR, US, and SOC
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS coa_analysis_snapshots (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT NOT NULL,
-                    snapshot_id TEXT NOT NULL,
-                    instrument_key TEXT NOT NULL,
-                    expiry_date TEXT NOT NULL,
-                    spot_price REAL,
-                    resistance_strike REAL,
-                    resistance_status TEXT,
-                    res_vol_ratio REAL,
-                    res_oi_ratio REAL,
-                    support_strike REAL,
-                    support_status TEXT,
-                    supp_vol_ratio REAL,
-                    supp_oi_ratio REAL,
-                    coa_scenario INTEGER,
-                    scenario_name TEXT,
-                    market_state TEXT,
-                    eos_price REAL,
-                    eor_price REAL,
-                    ur_price REAL,
-                    us_price REAL,
-                    soc_flag INTEGER
-                )
-            """)
+    def _execute_schema(self, conn: sqlite3.Connection):
+        cursor = conn.cursor()
+        
+        # Table 1: Raw Option Chain Records with Diversion prices
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS option_chain_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                snapshot_id TEXT NOT NULL,
+                instrument_key TEXT NOT NULL,
+                expiry_date TEXT NOT NULL,
+                spot_price REAL,
+                strike_price REAL NOT NULL,
+                call_ltp REAL,
+                call_volume INTEGER,
+                call_oi REAL,
+                call_oi_change REAL,
+                call_bid_price REAL,
+                call_bid_qty INTEGER,
+                call_ask_price REAL,
+                call_ask_qty INTEGER,
+                call_iv REAL,
+                call_diversion REAL,
+                put_ltp REAL,
+                put_volume INTEGER,
+                put_oi REAL,
+                put_oi_change REAL,
+                put_bid_price REAL,
+                put_bid_qty INTEGER,
+                put_ask_price REAL,
+                put_ask_qty INTEGER,
+                put_iv REAL,
+                put_diversion REAL
+            )
+        """)
 
-            # Table 3: Automated Trade Audit & Performance Tracker Log
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS trade_audit_log (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp TEXT NOT NULL,
-                    date TEXT NOT NULL,
-                    asset TEXT NOT NULL,
-                    setup_type TEXT NOT NULL,
-                    trigger_price REAL NOT NULL,
-                    entry_level REAL NOT NULL,
-                    target_price REAL NOT NULL,
-                    sl_price REAL NOT NULL,
-                    status TEXT NOT NULL,
-                    exit_time TEXT,
-                    points_captured REAL DEFAULT 0,
-                    loss_points REAL DEFAULT 0,
-                    duration_minutes REAL DEFAULT 0,
-                    notes TEXT
-                )
-            """)
+        # Table 2: COA 1.0 Analysis Snapshots Summary with UR, US, and SOC
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS coa_analysis_snapshots (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                snapshot_id TEXT NOT NULL,
+                instrument_key TEXT NOT NULL,
+                expiry_date TEXT NOT NULL,
+                spot_price REAL,
+                resistance_strike REAL,
+                resistance_status TEXT,
+                res_vol_ratio REAL,
+                res_oi_ratio REAL,
+                support_strike REAL,
+                support_status TEXT,
+                supp_vol_ratio REAL,
+                supp_oi_ratio REAL,
+                coa_scenario INTEGER,
+                scenario_name TEXT,
+                market_state TEXT,
+                eos_price REAL,
+                eor_price REAL,
+                ur_price REAL,
+                us_price REAL,
+                soc_flag INTEGER
+            )
+        """)
 
-            # Indexes for fast querying
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON option_chain_snapshots (timestamp);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_snapshot_id ON option_chain_snapshots (snapshot_id);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_coa_snapshot ON coa_analysis_snapshots (snapshot_id);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_date ON trade_audit_log (date);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_status ON trade_audit_log (status);")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_asset ON trade_audit_log (asset);")
+        # Table 3: Automated Trade Audit & Performance Tracker Log
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS trade_audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                date TEXT NOT NULL,
+                asset TEXT NOT NULL,
+                setup_type TEXT NOT NULL,
+                trigger_price REAL NOT NULL,
+                entry_level REAL NOT NULL,
+                target_price REAL NOT NULL,
+                sl_price REAL NOT NULL,
+                status TEXT NOT NULL,
+                exit_time TEXT,
+                points_captured REAL DEFAULT 0,
+                loss_points REAL DEFAULT 0,
+                duration_minutes REAL DEFAULT 0,
+                notes TEXT
+            )
+        """)
 
-            # Safely add missing columns to existing DB if needed
-            for col in ["call_diversion", "put_diversion"]:
-                try:
-                    cursor.execute(f"ALTER TABLE option_chain_snapshots ADD COLUMN {col} REAL;")
-                except sqlite3.OperationalError:
-                    pass
+        # Indexes for fast querying
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON option_chain_snapshots (timestamp);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_snapshot_id ON option_chain_snapshots (snapshot_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_coa_snapshot ON coa_analysis_snapshots (snapshot_id);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_date ON trade_audit_log (date);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_status ON trade_audit_log (status);")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_audit_asset ON trade_audit_log (asset);")
 
-            for col in ["ur_price", "us_price"]:
-                try:
-                    cursor.execute(f"ALTER TABLE coa_analysis_snapshots ADD COLUMN {col} REAL;")
-                except sqlite3.OperationalError:
-                    pass
-
+        # Safely add missing columns to existing DB if needed
+        for col in ["call_diversion", "put_diversion"]:
             try:
-                cursor.execute("ALTER TABLE coa_analysis_snapshots ADD COLUMN soc_flag INTEGER;")
+                cursor.execute(f"ALTER TABLE option_chain_snapshots ADD COLUMN {col} REAL;")
             except sqlite3.OperationalError:
                 pass
 
-            conn.commit()
+        for col in ["ur_price", "us_price"]:
+            try:
+                cursor.execute(f"ALTER TABLE coa_analysis_snapshots ADD COLUMN {col} REAL;")
+            except sqlite3.OperationalError:
+                pass
+
+        try:
+            cursor.execute("ALTER TABLE coa_analysis_snapshots ADD COLUMN soc_flag INTEGER;")
+        except sqlite3.OperationalError:
+            pass
+
+        conn.commit()
 
     def save_snapshot(self, records: List[Dict[str, Any]], analysis_res: Optional[Dict[str, Any]] = None, csv_path: Optional[str] = None):
         """
