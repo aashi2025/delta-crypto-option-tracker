@@ -125,9 +125,15 @@ class OptionChainCalculationEngine:
     def _analyze_side(self, records: List[Dict[str, Any]], key_type: str) -> Dict[str, Any]:
         vol_key = f"{key_type}_volume"
         oi_key = f"{key_type}_oi"
+        ltp_key = f"{key_type}_ltp"
 
-        sorted_vol = sorted(records, key=lambda x: x[vol_key], reverse=True)
-        sorted_oi = sorted(records, key=lambda x: x[oi_key], reverse=True)
+        # Filter only strikes with valid data or positive activity on this side
+        valid_records = [r for r in records if (r.get(vol_key, 0) > 0 or r.get(oi_key, 0) > 0 or r.get(ltp_key, 0) > 0)]
+        if not valid_records:
+            valid_records = records
+
+        sorted_vol = sorted(valid_records, key=lambda x: x[vol_key], reverse=True)
+        sorted_oi = sorted(valid_records, key=lambda x: x[oi_key], reverse=True)
 
         highest_vol = sorted_vol[0] if sorted_vol else None
         second_vol = sorted_vol[1] if len(sorted_vol) > 1 else None
@@ -161,7 +167,13 @@ class OptionChainCalculationEngine:
                     oi_status = "WTB"
                 oi_target_strike = second_oi["strike_price"]
 
-        primary_strike = highest_vol["strike_price"] if highest_vol else (highest_oi["strike_price"] if highest_oi else 0.0)
+        # Primary Strike: Highest Volume if > 0, else Highest OI
+        if highest_vol and highest_vol[vol_key] > 0:
+            primary_strike = highest_vol["strike_price"]
+        elif highest_oi and highest_oi[oi_key] > 0:
+            primary_strike = highest_oi["strike_price"]
+        else:
+            primary_strike = valid_records[len(valid_records) // 2]["strike_price"] if valid_records else 0.0
 
         if vol_status == "WTT" or oi_status == "WTT":
             overall_status = "WTT"
@@ -429,7 +441,8 @@ class OptionChainCalculationEngine:
             }
         }
 
-        key = (res_status, supp_status)
+        # Tuple format in scenarios dictionary is (supp_status, res_status)
+        key = (supp_status, res_status)
         match = scenarios.get(key, {
             "scenario": 0,
             "name": f"Custom Scenario: R={res_status}, S={supp_status}",
@@ -483,10 +496,16 @@ class OptionChainCalculationEngine:
         records_with_reversals = []
         for r in records:
             strike = r["strike_price"]
-            call_ltp = r.get("call_ltp", 0.0)
-            put_ltp = r.get("put_ltp", 0.0)
-            call_iv = max(0.05, r.get("call_iv", 0.0) / 100.0)
-            put_iv = max(0.05, r.get("put_iv", 0.0) / 100.0)
+            call_ltp = float(r.get("call_ltp", 0.0) or 0.0)
+            put_ltp = float(r.get("put_ltp", 0.0) or 0.0)
+            call_iv = max(0.05, float(r.get("call_iv", 0.0) or 0.0) / 100.0)
+            put_iv = max(0.05, float(r.get("put_iv", 0.0) or 0.0) / 100.0)
+
+            # If LTP is 0 (untraded far OTM strike), compute theoretical price via Black-Scholes
+            if call_ltp <= 0 and spot_price > 0:
+                call_ltp = round(black_scholes_call(spot_price, strike, days_to_expiry, self.r, call_iv), 2)
+            if put_ltp <= 0 and spot_price > 0:
+                put_ltp = round(black_scholes_put(spot_price, strike, days_to_expiry, self.r, put_iv), 2)
 
             call_diversion_simple = strike + call_ltp
             put_diversion_simple = strike - put_ltp
@@ -495,6 +514,8 @@ class OptionChainCalculationEngine:
             put_bs_reversal = solve_bs_implied_spot_put(put_ltp, strike, days_to_expiry, self.r, put_iv)
 
             rec_copy = dict(r)
+            rec_copy["call_ltp"] = call_ltp
+            rec_copy["put_ltp"] = put_ltp
             rec_copy["call_diversion"] = round(call_diversion_simple, 2)
             rec_copy["put_diversion"] = round(put_diversion_simple, 2)
             rec_copy["call_bs_reversal"] = round(call_bs_reversal, 2)
@@ -537,6 +558,85 @@ class OptionChainCalculationEngine:
             coa_info.get("soc_detected", False)
         )
 
+        # Comprehensive Diversion Strategy Calculation
+        # In Dr. Vinay Prakash Tiwari's LTP Calculator:
+        # Lower Diversions (Support Levels / Call Buy) strictly originate from Put diversions (EOS & strikes around/below spot).
+        # Upper Diversions (Resistance Levels / Put Buy) strictly originate from Call diversions (EOR & strikes around/above spot).
+        atm_strike = min(records_with_reversals, key=lambda x: abs(x["strike_price"] - spot_price))["strike_price"] if records_with_reversals else supp_strike
+
+        all_lower_divs = [{"strike": supp_strike, "level": eos_price, "type": "EOS", "name": f"EOS ({int(supp_strike):,} PE Div)"}]
+        all_upper_divs = [{"strike": res_strike, "level": eor_price, "type": "EOR", "name": f"EOR ({int(res_strike):,} CE Div)"}]
+
+        for r in records_with_reversals:
+            stk = r["strike_price"]
+            p_div = r["put_diversion"]
+            c_div = r["call_diversion"]
+
+            # Put Diversion (Support / Call Buy): strikes around/below ATM and level below spot
+            if stk <= max(supp_strike, atm_strike) and 0 < p_div < spot_price:
+                all_lower_divs.append({
+                    "strike": stk,
+                    "level": p_div,
+                    "type": "PUT_DIVERSION",
+                    "name": f"{int(stk):,} PE Div (Support)"
+                })
+
+            # Call Diversion (Resistance / Put Buy): strikes around/above ATM and level above spot
+            if stk >= min(res_strike, atm_strike) and c_div > spot_price:
+                all_upper_divs.append({
+                    "strike": stk,
+                    "level": c_div,
+                    "type": "CALL_DIVERSION",
+                    "name": f"{int(stk):,} CE Div (Resistance)"
+                })
+
+        all_lower_divs.sort(key=lambda x: x["level"], reverse=True)
+        all_upper_divs.sort(key=lambda x: x["level"])
+
+        imm_lower = all_lower_divs[0]
+        imm_upper = all_upper_divs[0]
+
+        lower_dist_pts = round(max(0.0, spot_price - imm_lower["level"]), 2)
+        upper_dist_pts = round(max(0.0, imm_upper["level"] - spot_price), 2)
+        channel_width = round(imm_upper["level"] - imm_lower["level"], 2)
+
+        diversion_strategy = {
+            "immediate_lower_diversion": {
+                "strike": imm_lower["strike"],
+                "price": imm_lower["level"],
+                "name": imm_lower["name"],
+                "distance_pts": lower_dist_pts,
+                "distance_pct": round((lower_dist_pts / spot_price) * 100.0, 2) if spot_price > 0 else 0.0,
+                "action": "BUY_CALL_ON_TOUCH",
+                "label": f"Immediate Support Diversion: {imm_lower['level']:,.2f}"
+            },
+            "immediate_upper_diversion": {
+                "strike": imm_upper["strike"],
+                "price": imm_upper["level"],
+                "name": imm_upper["name"],
+                "distance_pts": upper_dist_pts,
+                "distance_pct": round((upper_dist_pts / spot_price) * 100.0, 2) if spot_price > 0 else 0.0,
+                "action": "BUY_PUT_ON_TOUCH",
+                "label": f"Immediate Resistance Diversion: {imm_upper['level']:,.2f}"
+            },
+            "current_channel": {
+                "lower": imm_lower["level"],
+                "upper": imm_upper["level"],
+                "width_pts": channel_width,
+                "midpoint": round((imm_lower["level"] + imm_upper["level"]) / 2.0, 2)
+            },
+            "channel_directive": f"Active Channel: {imm_lower['level']:,.2f} to {imm_upper['level']:,.2f} (Range: ~{channel_width:,.2f} pts). Buy CE at {imm_lower['level']:,.2f} (Target: {imm_upper['level']:,.2f}) | Buy PE at {imm_upper['level']:,.2f} (Target: {imm_lower['level']:,.2f}).",
+            "key_levels_roadmap": [
+                {"name": "Ultimate Support (US)", "level": us_price, "role": "Call Stop-Loss / Breakdown Level"},
+                {"name": "Extension of Support (EOS)", "level": eos_price, "role": "Primary Call Entry Reversal"},
+                {"name": "Immediate Lower Diversion", "level": imm_lower["level"], "role": "Next Support Bounce"},
+                {"name": "Current Spot Price", "level": spot_price, "role": "Current Market Price"},
+                {"name": "Immediate Upper Diversion", "level": imm_upper["level"], "role": "Next Resistance Reversal"},
+                {"name": "Extension of Resistance (EOR)", "level": eor_price, "role": "Primary Put Entry Reversal"},
+                {"name": "Upper Resistance (UR)", "level": ur_price, "role": "Put Stop-Loss / Breakout Level"}
+            ]
+        }
+
         analysis_result = {
             "spot_price": spot_price,
             "expiry_date": expiry_date_str,
@@ -545,6 +645,7 @@ class OptionChainCalculationEngine:
             "coa_scenario": coa_info,
             "coa2_confirmation": coa2_confirmation,
             "buyer_directive": buyer_directive,
+            "diversion_strategy": diversion_strategy,
             "soc_detected": coa_info.get("soc_detected", False),
             "soc_message": coa_info.get("soc_message", ""),
             "eos": {

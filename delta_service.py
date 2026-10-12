@@ -142,9 +142,20 @@ class DeltaExchangeService:
 
             rec = strikes_map[strike]
             ltp = float(t.get("close") or t.get("mark_price") or 0.0)
-            vol = int(float(t.get("volume") or 0.0))
-            oi = float(t.get("oi") or t.get("oi_contracts") or 0.0)
-            oi_change = float(t.get("oi_change_usd_6h") or 0.0)
+
+            # Contract Multiplier: 1 contract in Delta Exchange is 0.001 BTC for BTC, 0.01 ETH for ETH
+            contract_mult = 1000.0 if symbol_prefix == "BTC" else (100.0 if symbol_prefix == "ETH" else 1.0)
+            raw_vol = float(t.get("volume") or 0.0)
+            vol = int(round(raw_vol * contract_mult)) if raw_vol < 100 else int(round(raw_vol))
+
+            raw_oi_contracts = float(t.get("oi_contracts") or 0.0)
+            raw_oi = float(t.get("oi") or 0.0)
+            if raw_oi_contracts > 0:
+                oi = int(round(raw_oi_contracts))
+            else:
+                oi = int(round(raw_oi * contract_mult))
+
+            oi_change = round(float(t.get("oi_change_usd_6h") or 0.0), 2)
             greeks = t.get("greeks") or {}
             iv = float(greeks.get("iv") or t.get("mark_vol") or 0.0) * 100.0
 

@@ -242,11 +242,13 @@ def get_option_chain_data(
             "status": "success",
             "meta": meta,
             "analysis": {
+                "spot_price": meta.get("spot_price", 0.0),
                 "resistance": analysis_res.get("resistance"),
                 "support": analysis_res.get("support"),
                 "coa_scenario": analysis_res.get("coa_scenario"),
                 "coa2_confirmation": analysis_res.get("coa2_confirmation"),
                 "buyer_directive": analysis_res.get("buyer_directive"),
+                "diversion_strategy": analysis_res.get("diversion_strategy"),
                 "eos": analysis_res.get("eos"),
                 "eor": analysis_res.get("eor"),
                 "ur": analysis_res.get("ur"),
@@ -386,6 +388,9 @@ def serve_dashboard():
                     <button type="button" class="btn btn-outline-warning active" id="btn-mode-live" onclick="setStrategyMode('live')">
                         <i class="fa-solid fa-bolt me-1"></i> ⚡ Live COA 1.0 / 2.0 Mode
                     </button>
+                    <button type="button" class="btn btn-outline-info" id="btn-mode-diversion" onclick="setStrategyMode('diversion')">
+                        <i class="fa-solid fa-arrows-split-up-and-left me-1"></i> 🎯 Diversion Strategy Mode
+                    </button>
                     <button type="button" class="btn btn-outline-warning" id="btn-mode-920" onclick="setStrategyMode('920')">
                         <i class="fa-solid fa-sun me-1"></i> 🌅 9:20 AM Morning Strategy Mode
                     </button>
@@ -515,6 +520,58 @@ def serve_dashboard():
         <div class="alert alert-dark border-secondary py-2 px-3 m-0 mt-3 small text-light d-flex justify-content-between align-items-center flex-wrap gap-2">
             <span><i class="fa-solid fa-circle-info text-info me-2"></i><strong id="text-920-status-msg">9:20 AM Base Levels Locked. Watch for morning retest near 9:20 EOS / EOR levels.</strong></span>
             <span class="badge bg-secondary font-monospace" id="tag-920-lock-time">LOCKED @ 09:20 AM</span>
+        </div>
+    </div>
+
+    <!-- DEDICATED DIVERSION REVERSAL STRATEGY PANEL (Visible when Diversion Mode active) -->
+    <div class="card-custom p-3 mb-3 border-info d-none" id="card-diversion-strategy" style="background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border-left: 4px solid #06b6d4 !important;">
+        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2 border-bottom border-secondary pb-2">
+            <div>
+                <h5 class="m-0 text-info fw-bold"><i class="fa-solid fa-arrows-split-up-and-left me-2"></i>🎯 Dr. Vinay Prakash Tiwari Diversion Reversal Strategy Engine</h5>
+                <small class="text-muted">हर स्ट्राइक का कॉल डाइवर्जन (ऊपरी रेजिस्टेंस) और पुट डाइवर्जन (निचला सपोर्ट) रिवर्सल चैनल</small>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-info text-dark fw-bold px-3 py-2" id="badge-channel-status">CHANNELS ACTIVE</span>
+            </div>
+        </div>
+
+        <!-- 3-Column Immediate Levels Card -->
+        <div class="row g-2 mb-3">
+            <div class="col-12 col-md-4">
+                <div class="card-custom p-3 border-success text-center h-100" style="background: rgba(25, 135, 84, 0.12);">
+                    <small class="text-success fw-bold d-block text-uppercase"><i class="fa-solid fa-arrow-turn-up me-1"></i> Immediate Support Diversion (Call Buy)</small>
+                    <div id="div-imm-lower-price" class="fw-bold text-success fs-3 mt-1">-</div>
+                    <div id="div-imm-lower-details" class="small text-light mt-1">Strike: - | Dist: - pts</div>
+                    <span class="badge bg-success mt-2">🟢 CALL (CE) BUY LEVEL</span>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="card-custom p-3 border-secondary text-center h-100" style="background: rgba(30, 41, 59, 0.6);">
+                    <small class="text-info fw-bold d-block text-uppercase"><i class="fa-solid fa-crosshairs me-1"></i> Active Trading Channel Corridor</small>
+                    <div id="div-channel-width" class="fw-bold text-warning fs-3 mt-1">- pts</div>
+                    <div id="div-channel-corridor" class="small text-muted mt-1">[ - to - ]</div>
+                    <div id="div-channel-midpoint" class="small text-info mt-1">Channel Midpoint: -</div>
+                </div>
+            </div>
+
+            <div class="col-12 col-md-4">
+                <div class="card-custom p-3 border-danger text-center h-100" style="background: rgba(220, 53, 69, 0.12);">
+                    <small class="text-danger fw-bold d-block text-uppercase"><i class="fa-solid fa-arrow-turn-down me-1"></i> Immediate Resistance Diversion (Put Buy)</small>
+                    <div id="div-imm-upper-price" class="fw-bold text-danger fs-3 mt-1">-</div>
+                    <div id="div-imm-upper-details" class="small text-light mt-1">Strike: - | Dist: - pts</div>
+                    <span class="badge bg-danger mt-2">🔴 PUT (PE) BUY LEVEL</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy Directive Callout -->
+        <div class="alert alert-dark border-info text-light d-flex align-items-center mb-0 p-2 px-3" role="alert" style="background: rgba(6, 182, 212, 0.08);">
+            <i class="fa-solid fa-lightbulb text-warning fs-4 me-3"></i>
+            <div>
+                <strong class="text-info">डाइवर्जन ट्रेडिंग नियम (Diversion Rule):</strong>
+                <span id="div-strategy-directive" class="ms-1 text-light">डाइवर्जन लेवल्स लोड हो रहे हैं...</span>
+            </div>
         </div>
     </div>
 
@@ -869,6 +926,45 @@ def serve_dashboard():
     </div>
 </div>
 
+<!-- DIVERSION DETAIL MODAL -->
+<div class="modal fade" id="diversionDetailModal" tabindex="-1" aria-labelledby="diversionModalTitle" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content card-custom border-info text-light" style="background: #1e293b;">
+      <div class="modal-header border-secondary">
+        <h5 class="modal-title text-info fw-bold" id="diversionModalTitle">
+          <i class="fa-solid fa-arrows-split-up-and-left me-2"></i>स्ट्राइक डाइवर्जन एनालिसिस (Reversal Setup)
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="text-center mb-3 p-3 rounded" id="div-modal-header-box" style="background: rgba(6, 182, 212, 0.1);">
+          <span class="fs-6 text-uppercase fw-bold text-muted" id="div-modal-strike-title">Strike Call Diversion</span>
+          <div class="fs-2 fw-bold mt-1 text-warning" id="div-modal-level">-</div>
+          <small class="text-muted d-block mt-1" id="div-modal-bs-level">Implied Reversal Level</small>
+        </div>
+
+        <div class="p-3 mb-3 rounded" style="background: #0f172a; border: 1px solid #334155;">
+          <h6 class="text-info fw-bold mb-2"><i class="fa-solid fa-compass me-2"></i>ट्रेडिंग निर्देश (Trading Action Directive):</h6>
+          <p class="small mb-2" id="div-modal-explanation">
+            अगर प्राइस इस लेवल पर पहुंचता है, तो यह एक महत्वपूर्ण रिवर्सल पॉइंट है।
+          </p>
+          <div class="d-flex justify-content-between small text-muted border-top border-secondary pt-2">
+            <span><strong>एंट्री लेवल:</strong> <span class="text-light" id="div-modal-entry">-</span></span>
+            <span><strong>टारगेट:</strong> <span class="text-success" id="div-modal-target">-</span></span>
+            <span><strong>Stop Loss:</strong> <span class="text-danger" id="div-modal-sl">-</span></span>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-secondary">
+        <button type="button" class="btn btn-outline-info btn-sm" id="btn-modal-plot-chart" onclick="plotModalDiversionLine()">
+          <i class="fa-solid fa-chart-line me-1"></i> चार्ट पर लाइन ड्रा करें
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">बंद करें</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Bootstrap 5 JS & Popper -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
@@ -1038,33 +1134,93 @@ def serve_dashboard():
         }, 5000);
     }
 
+    let currentModalLine = null;
+
+    function showDiversionModal(strike, side, divPrice, bsPrice, ltp) {
+        const isCall = side === "CALL";
+        const title = `${strike.toLocaleString()} ${isCall ? 'Call Diversion (Upper Resistance)' : 'Put Diversion (Lower Support)'}`;
+        document.getElementById("div-modal-strike-title").innerText = title;
+        document.getElementById("div-modal-level").innerText = Number(divPrice).toFixed(2);
+        document.getElementById("div-modal-level").className = `fs-2 fw-bold mt-1 ${isCall ? 'text-danger' : 'text-success'}`;
+        document.getElementById("div-modal-bs-level").innerText = `Black-Scholes Implied Reversal: ${bsPrice ? Number(bsPrice).toFixed(2) : Number(divPrice).toFixed(2)} | Option LTP: ${Number(ltp).toFixed(2)}`;
+
+        const headerBox = document.getElementById("div-modal-header-box");
+        if (headerBox) {
+            headerBox.style.background = isCall ? 'rgba(220, 53, 69, 0.12)' : 'rgba(25, 135, 84, 0.12)';
+        }
+
+        const expText = isCall
+            ? `यह स्ट्राइक ${strike.toLocaleString()} का Call Diversion (ऊपरी रेजिस्टेंस) है। यदि मार्केट ऊपर चढ़कर ${Number(divPrice).toFixed(2)} के पास आता है, तो यहाँ से मार्केट में गिरावट (Put Buy / CE Exit) का रिवर्सल ट्रेड बनता है।`
+            : `यह स्ट्राइक ${strike.toLocaleString()} का Put Diversion (निचला सपोर्ट) है। यदि मार्केट गिरकर ${Number(divPrice).toFixed(2)} के पास आता है, तो यहाँ से मार्केट में उछाल (Call Buy / PE Exit) का रिवर्सल ट्रेड बनता है।`;
+        document.getElementById("div-modal-explanation").innerText = expText;
+
+        document.getElementById("div-modal-entry").innerText = `${Number(divPrice).toFixed(2)}`;
+        document.getElementById("div-modal-target").innerText = isCall ? `Next Lower Div (~${(divPrice - 400).toFixed(0)})` : `Next Upper Div (~${(divPrice + 400).toFixed(0)})`;
+        document.getElementById("div-modal-sl").innerText = isCall ? `${(divPrice * 1.004).toFixed(2)} (+0.4%)` : `${(divPrice * 0.996).toFixed(2)} (-0.4%)`;
+
+        currentModalLine = { price: divPrice, title: `${strike} ${isCall ? 'Call Div' : 'Put Div'}: ${Number(divPrice).toFixed(1)}`, color: isCall ? '#ef4444' : '#22c55e' };
+
+        const myModal = new bootstrap.Modal(document.getElementById('diversionDetailModal'));
+        myModal.show();
+    }
+
+    function plotModalDiversionLine() {
+        if (!candlestickSeries || !currentModalLine) return;
+        const line = candlestickSeries.createPriceLine({
+            price: currentModalLine.price,
+            color: currentModalLine.color,
+            lineWidth: 2,
+            lineStyle: LightweightCharts.LineStyle.Dashed,
+            axisLabelVisible: true,
+            title: currentModalLine.title
+        });
+        activePriceLines.push(line);
+        const myModalEl = document.getElementById('diversionDetailModal');
+        const modal = bootstrap.Modal.getInstance(myModalEl);
+        if (modal) modal.hide();
+    }
+
     // ==========================================
     // STRATEGY MODE SELECTION & CONTROLLER
     // ==========================================
     function setStrategyMode(mode) {
         currentStrategyMode = mode;
         const btnLive = document.getElementById("btn-mode-live");
+        const btnDiversion = document.getElementById("btn-mode-diversion");
         const btn920 = document.getElementById("btn-mode-920");
         const card920 = document.getElementById("card-920-setup");
+        const cardDiv = document.getElementById("card-diversion-strategy");
         const summaryCards = document.getElementById("live-summary-cards-row");
         const toolbar = document.getElementById("chart-line-controls-toolbar");
         const coa2Container = document.getElementById("coa2-container");
 
-        btnLive.classList.remove("active");
-        btn920.classList.remove("active");
+        if (btnLive) btnLive.classList.remove("active");
+        if (btnDiversion) btnDiversion.classList.remove("active");
+        if (btn920) btn920.classList.remove("active");
 
         if (mode === "920") {
-            btn920.classList.add("active");
-            card920.classList.remove("d-none");
+            if (btn920) btn920.classList.add("active");
+            if (card920) card920.classList.remove("d-none");
+            if (cardDiv) cardDiv.classList.add("d-none");
             if (summaryCards) summaryCards.classList.add("d-none");
             if (coa2Container) coa2Container.classList.add("d-none");
             if (toolbar) toolbar.classList.add("d-none");
 
             setDashboardView("split");
             fetch920StrategyData();
+        } else if (mode === "diversion") {
+            if (btnDiversion) btnDiversion.classList.add("active");
+            if (cardDiv) cardDiv.classList.remove("d-none");
+            if (card920) card920.classList.add("d-none");
+            if (summaryCards) summaryCards.classList.remove("d-none");
+            if (coa2Container) coa2Container.classList.remove("d-none");
+            if (toolbar) toolbar.classList.remove("d-none");
+
+            fetchOptionChainData();
         } else {
-            btnLive.classList.add("active");
-            card920.classList.add("d-none");
+            if (btnLive) btnLive.classList.add("active");
+            if (cardDiv) cardDiv.classList.add("d-none");
+            if (card920) card920.classList.add("d-none");
             if (summaryCards) summaryCards.classList.remove("d-none");
             if (coa2Container) coa2Container.classList.remove("d-none");
             if (toolbar) toolbar.classList.remove("d-none");
@@ -1565,7 +1721,7 @@ def serve_dashboard():
             records.sort((a,b) => a.strike_price - b.strike_price);
             const atmStrike = records.reduce((prev, curr) => Math.abs(curr.strike_price - spot) < Math.abs(prev.strike_price - spot) ? curr : prev).strike_price;
             const atmIdx = records.findIndex(r => r.strike_price === atmStrike);
-            const nearStrikes = records.slice(Math.max(0, atmIdx - 1), Math.min(records.length, atmIdx + 2));
+            const nearStrikes = records.slice(Math.max(0, atmIdx - 2), Math.min(records.length, atmIdx + 3));
             
             nearStrikes.forEach(r => {
                 if (r.call_diversion && r.call_diversion > 0) {
@@ -1595,12 +1751,57 @@ def serve_dashboard():
             });
         }
 
+        // 5b. Dedicated Diversion Strategy Active Channels
+        if (currentStrategyMode === "diversion" && analysis.diversion_strategy) {
+            const divStrat = analysis.diversion_strategy;
+            const immLower = divStrat.immediate_lower_diversion;
+            const immUpper = divStrat.immediate_upper_diversion;
+            const channel = divStrat.current_channel;
+
+            if (immLower && immLower.price > 0) {
+                const line = candlestickSeries.createPriceLine({
+                    price: Number(immLower.price.toFixed(2)),
+                    color: '#22c55e',
+                    lineWidth: 3,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `Imm Support Div (CE Buy): ${immLower.price.toFixed(1)}`,
+                });
+                activePriceLines.push(line);
+            }
+
+            if (immUpper && immUpper.price > 0) {
+                const line = candlestickSeries.createPriceLine({
+                    price: Number(immUpper.price.toFixed(2)),
+                    color: '#ef4444',
+                    lineWidth: 3,
+                    lineStyle: LightweightCharts.LineStyle.Solid,
+                    axisLabelVisible: true,
+                    title: `Imm Resist Div (PE Buy): ${immUpper.price.toFixed(1)}`,
+                });
+                activePriceLines.push(line);
+            }
+
+            if (channel && channel.midpoint > 0) {
+                const line = candlestickSeries.createPriceLine({
+                    price: Number(channel.midpoint.toFixed(2)),
+                    color: '#f59e0b',
+                    lineWidth: 2,
+                    lineStyle: LightweightCharts.LineStyle.Dashed,
+                    axisLabelVisible: true,
+                    title: `Channel Mid: ${channel.midpoint.toFixed(1)}`,
+                });
+                activePriceLines.push(line);
+            }
+        }
+
         // 6. Option Buyer Target / SL Projections
         if (showTargetSl && analysis.buyer_directive) {
             const directive = analysis.buyer_directive;
             const extractNum = (str) => {
                 if (!str) return null;
-                const m = str.match(/\\d+(\\.\\d+)?/);
+                const clean = str.replace(/,/g, '');
+                const m = clean.match(/\\d+(\\.\\d+)?/);
                 return m ? parseFloat(m[0]) : null;
             };
 
@@ -1834,6 +2035,50 @@ def serve_dashboard():
             suppVel.className = `small mt-1 badge ${suppInfo.shifting_velocity.badge_class}`;
         }
 
+        // Populate Dedicated Diversion Reversal Strategy Engine Panel
+        const divStrat = analysis.diversion_strategy;
+        if (divStrat) {
+            const immLower = divStrat.immediate_lower_diversion;
+            const immUpper = divStrat.immediate_upper_diversion;
+            const chan = divStrat.current_channel;
+
+            const immLowerEl = document.getElementById("div-imm-lower-price");
+            if (immLowerEl && immLower) {
+                immLowerEl.innerText = immLower.price ? immLower.price.toFixed(2) : "-";
+            }
+            const immLowerDetailsEl = document.getElementById("div-imm-lower-details");
+            if (immLowerDetailsEl && immLower) {
+                immLowerDetailsEl.innerText = `Strike: ${immLower.strike ? immLower.strike.toLocaleString() : '-'} | Dist: ${immLower.distance_pts || 0} pts (${immLower.distance_pct || 0}%)`;
+            }
+
+            const immUpperEl = document.getElementById("div-imm-upper-price");
+            if (immUpperEl && immUpper) {
+                immUpperEl.innerText = immUpper.price ? immUpper.price.toFixed(2) : "-";
+            }
+            const immUpperDetailsEl = document.getElementById("div-imm-upper-details");
+            if (immUpperDetailsEl && immUpper) {
+                immUpperDetailsEl.innerText = `Strike: ${immUpper.strike ? immUpper.strike.toLocaleString() : '-'} | Dist: ${immUpper.distance_pts || 0} pts (${immUpper.distance_pct || 0}%)`;
+            }
+
+            const chanWidthEl = document.getElementById("div-channel-width");
+            if (chanWidthEl && chan) {
+                chanWidthEl.innerText = `${chan.width_pts || 0} pts`;
+            }
+            const chanCorridorEl = document.getElementById("div-channel-corridor");
+            if (chanCorridorEl && chan) {
+                chanCorridorEl.innerText = chan.corridor_str || `[${chan.lower?.toFixed(0)} - ${chan.upper?.toFixed(0)}]`;
+            }
+            const chanMidEl = document.getElementById("div-channel-midpoint");
+            if (chanMidEl && chan) {
+                chanMidEl.innerText = `Channel Midpoint: ${chan.midpoint ? chan.midpoint.toFixed(2) : '-'}`;
+            }
+
+            const divDirEl = document.getElementById("div-strategy-directive");
+            if (divDirEl) {
+                divDirEl.innerText = divStrat.channel_directive || "चैनल के निचले डाइवर्जन पर Call (CE) खरीदें और ऊपरी डाइवर्जन पर Put (PE) खरीदें।";
+            }
+        }
+
         // Key Levels & Black-Scholes Theoretical Diversions
         const spot = meta.spot_price;
         document.getElementById("spot-price").innerText = spot.toFixed(2);
@@ -1966,7 +2211,7 @@ def serve_dashboard():
                 <td class="text-end ${r.call_oi_change >= 0 ? 'text-success' : 'text-danger'} ${isCallITM ? 'bg-itm-tint' : ''}">${r.call_oi_change >= 0 ? '+' : ''}${formatNumber(r.call_oi_change)}</td>
                 <td class="text-end ${callVolClass} ${isCallITM ? 'bg-itm-tint' : ''}" style="${callVolStyle}">${formatNumber(r.call_volume)}</td>
                 
-                <td class="text-end text-warning fw-bold ${isCallITM ? 'bg-itm-tint' : ''}" style="cursor: pointer;" data-bs-toggle="tooltip" data-bs-placement="top" title="${cDivToolTip}" onclick="alert('Calculated via Black-Scholes IV @ ${meta.timestamp}\\nCall Diversion: ${r.call_diversion.toFixed(2)}\\nBS Reversal Spot: ${r.call_bs_reversal || '-'}')">
+                <td class="text-end text-warning fw-bold ${isCallITM ? 'bg-itm-tint' : ''}" style="cursor: pointer;" data-bs-toggle="tooltip" data-bs-placement="top" title="${cDivToolTip}" onclick="showDiversionModal(${strike}, 'CALL', ${r.call_diversion}, ${r.call_bs_reversal || 0}, ${r.call_ltp})">
                     ${r.call_diversion.toFixed(1)} <i class="fa-solid fa-circle-info ms-1 text-info opacity-75" style="font-size:0.75rem;"></i>
                 </td>
                 
@@ -1978,7 +2223,7 @@ def serve_dashboard():
                 
                 <td class="text-start fw-bold text-info ${isPutITM ? 'bg-itm-tint' : ''}">${r.put_ltp.toFixed(2)}</td>
                 
-                <td class="text-start text-warning fw-bold ${isPutITM ? 'bg-itm-tint' : ''}" style="cursor: pointer;" data-bs-toggle="tooltip" data-bs-placement="top" title="${pDivToolTip}" onclick="alert('Calculated via Black-Scholes IV @ ${meta.timestamp}\\nPut Diversion: ${r.put_diversion.toFixed(2)}\\nBS Reversal Spot: ${r.put_bs_reversal || '-'}')">
+                <td class="text-start text-warning fw-bold ${isPutITM ? 'bg-itm-tint' : ''}" style="cursor: pointer;" data-bs-toggle="tooltip" data-bs-placement="top" title="${pDivToolTip}" onclick="showDiversionModal(${strike}, 'PUT', ${r.put_diversion}, ${r.put_bs_reversal || 0}, ${r.put_ltp})">
                     <i class="fa-solid fa-circle-info me-1 text-info opacity-75" style="font-size:0.75rem;"></i> ${r.put_diversion.toFixed(1)}
                 </td>
                 
