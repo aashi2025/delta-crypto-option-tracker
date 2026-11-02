@@ -140,6 +140,15 @@ class OptionChainDB:
             )
         """)
 
+        # Table 4: Key-Value System Configuration Table (WhatsApp Alerts, API Keys, etc.)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS system_config (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
         # Indexes for fast querying
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_timestamp ON option_chain_snapshots (timestamp);")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_snapshot_id ON option_chain_snapshots (snapshot_id);")
@@ -566,6 +575,34 @@ class OptionChainDB:
             "total_profit_points": total_profit_pts,
             "total_loss_points": total_loss_pts
         }
+
+    def get_config(self, key: str, default: Optional[str] = None) -> Optional[str]:
+        """Gets configuration value by key from system_config table."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT value FROM system_config WHERE key = ?", (key,))
+            row = cursor.fetchone()
+            return row[0] if row else default
+
+    def set_config(self, key: str, value: str) -> None:
+        """Sets configuration key-value pair in system_config table."""
+        now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO system_config (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            """, (key, str(value), now_str))
+            conn.commit()
+
+    def get_all_configs(self) -> Dict[str, str]:
+        """Returns all system configuration key-value pairs."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT key, value FROM system_config")
+            rows = cursor.fetchall()
+            return {r[0]: r[1] for r in rows}
 
 
 

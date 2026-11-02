@@ -1,0 +1,2152 @@
+<!DOCTYPE html>
+<html lang="hi" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LogicTrader Crypto | Delta Exchange LTP Calculator Pro</title>
+    <!-- Favicon -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐂</text></svg>">
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- Bootstrap 5.3 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- FontAwesome 6.5 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <!-- TradingView Lightweight Charts 4.1.1 -->
+    <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+    <style>
+        :root {
+            --bg-body: #0d1117;
+            --bg-sidebar: #131722;
+            --bg-card: #171b26;
+            --bg-card-hover: #1e2433;
+            --bg-elevated: #1e222d;
+            --border-color: #262b3d;
+            --border-subtle: #1e2333;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+            --accent-orange: #ff6b00;
+            --accent-orange-hover: #ff8533;
+            --call-red: #ef4444;
+            --call-header: linear-gradient(135deg, #b91c1c 0%, #dc2626 100%);
+            --put-green: #22c55e;
+            --put-header: linear-gradient(135deg, #15803d 0%, #16a34a 100%);
+            --strike-header: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+            --atm-blue: #0284c7;
+            --wtt-yellow: #f59e0b;
+        }
+
+        * { box-sizing: border-box; }
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-primary);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            font-size: 0.85rem;
+            margin: 0;
+            padding: 0;
+            overflow-x: hidden;
+        }
+
+        /* Top Header Navbar */
+        .top-navbar {
+            background: var(--bg-sidebar);
+            border-bottom: 1px solid var(--border-color);
+            height: 56px;
+            padding: 0 16px;
+            position: sticky;
+            top: 0;
+            z-index: 1020;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .brand-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--text-primary);
+        }
+
+        .brand-bull-icon {
+            font-size: 1.6rem;
+            filter: drop-shadow(0 0 8px rgba(255, 107, 0, 0.4));
+        }
+
+        .brand-title {
+            font-family: 'Outfit', sans-serif;
+            font-size: 1.15rem;
+            font-weight: 800;
+            letter-spacing: -0.3px;
+            background: linear-gradient(135deg, #ff8533 0%, #ff6b00 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .brand-sub {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: block;
+            margin-top: -3px;
+        }
+
+        /* App Wrapper with Sidebar */
+        .app-container {
+            display: flex;
+            min-height: calc(100vh - 56px);
+        }
+
+        /* Left Navigation Sidebar (LogicTrader Style) */
+        .sidebar-nav {
+            width: 72px;
+            background: var(--bg-sidebar);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px 0;
+            gap: 6px;
+            flex-shrink: 0;
+            position: sticky;
+            top: 56px;
+            height: calc(100vh - 56px);
+            overflow-y: auto;
+            z-index: 1010;
+        }
+
+        .sidebar-item {
+            width: 60px;
+            height: 52px;
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-secondary);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            background: transparent;
+            border: none;
+            padding: 4px;
+        }
+
+        .sidebar-item i {
+            font-size: 1.05rem;
+            margin-bottom: 2px;
+            transition: transform 0.2s;
+        }
+
+        .sidebar-item span {
+            font-size: 0.62rem;
+            font-weight: 600;
+            letter-spacing: -0.2px;
+            white-space: nowrap;
+        }
+
+        .sidebar-item:hover {
+            color: var(--text-primary);
+            background: rgba(255, 107, 0, 0.12);
+        }
+
+        .sidebar-item:hover i {
+            transform: scale(1.1);
+        }
+
+        .sidebar-item.active {
+            background: var(--accent-orange) !important;
+            color: #ffffff !important;
+            box-shadow: 0 4px 12px rgba(255, 107, 0, 0.35);
+        }
+
+        /* Main Workspace Container */
+        .main-workspace {
+            flex: 1;
+            padding: 12px 16px;
+            overflow-x: hidden;
+            width: calc(100% - 72px);
+        }
+
+        /* Top Controls Toolbar Bar */
+        .controls-card {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 8px 14px;
+            margin-bottom: 12px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+        }
+
+        /* Spot & Futures Ticker Banner (LogicTrader green/red banner) */
+        .spot-ticker-banner {
+            background: linear-gradient(135deg, rgba(22, 163, 74, 0.2) 0%, rgba(15, 23, 42, 0.8) 100%);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            border-radius: 8px;
+            padding: 7px 16px;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .spot-badge-pill {
+            background: #16a34a;
+            color: #ffffff;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 800;
+            font-size: 1.05rem;
+            padding: 4px 14px;
+            border-radius: 6px;
+            box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #ffffff;
+            animation: pulse-animation 1.5s infinite;
+        }
+
+        @keyframes pulse-animation {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.3); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+
+        /* View Mode Layouts */
+        .split-view-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+
+        @media (max-width: 1200px) {
+            .split-view-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Chart Card */
+        .chart-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 12px;
+            height: 520px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        #tv-chart-container {
+            flex: 1;
+            width: 100%;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        /* Option Chain Table Card */
+        .chain-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .table-responsive-custom {
+            max-height: 540px;
+            overflow-y: auto;
+            border-radius: 6px;
+            border: 1px solid var(--border-color);
+        }
+
+        /* Option Chain Header Styling (Exact LogicTrader Colors) */
+        .table-chain {
+            width: 100%;
+            margin: 0;
+            border-collapse: separate;
+            border-spacing: 0;
+            font-size: 0.78rem;
+        }
+
+        .table-chain thead th {
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            padding: 6px 4px;
+            font-weight: 700;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 0.72rem;
+            letter-spacing: 0.2px;
+        }
+
+        .th-call-super {
+            background: var(--call-header) !important;
+            color: #ffffff;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .th-put-super {
+            background: var(--put-header) !important;
+            color: #ffffff;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .th-strike-super {
+            background: var(--strike-header) !important;
+            color: #38bdf8;
+            font-size: 0.75rem;
+        }
+
+        .th-sub-call {
+            background: #2b1116 !important;
+            color: #fca5a5;
+        }
+
+        .th-sub-put {
+            background: #0f2419 !important;
+            color: #86efac;
+        }
+
+        .th-sub-strike {
+            background: #182234 !important;
+            color: #e2e8f0;
+        }
+
+        /* Table Rows & Cells */
+        .table-chain tbody td {
+            padding: 5px 6px;
+            border: 1px solid var(--border-subtle);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.76rem;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .table-chain tbody tr:hover td {
+            background-color: rgba(255, 255, 255, 0.04) !important;
+        }
+
+        /* Center Strike Price Cell */
+        .td-strike {
+            background: #18202f !important;
+            color: #f8fafc;
+            font-weight: 800;
+            text-align: center;
+            font-size: 0.82rem;
+        }
+
+        .td-atm-strike {
+            background: #0284c7 !important;
+            color: #ffffff !important;
+            font-weight: 800;
+            text-align: center;
+            box-shadow: inset 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+
+        /* Highest Volume / OI Highlights */
+        .cell-max-call {
+            background-color: #dc2626 !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            border-radius: 4px;
+        }
+
+        .cell-max-put {
+            background-color: #16a34a !important;
+            color: #ffffff !important;
+            font-weight: 700;
+            border-radius: 4px;
+        }
+
+        .cell-wtt-wtb {
+            background-color: rgba(245, 158, 11, 0.85) !important;
+            color: #000000 !important;
+            font-weight: 700;
+            border-radius: 4px;
+        }
+
+        /* Cell Sub-Percentage Display */
+        .cell-val {
+            display: block;
+            line-height: 1.1;
+        }
+        .cell-pct {
+            display: block;
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-weight: 600;
+            margin-top: 1px;
+        }
+
+        /* Levels Cell (Diversion) Clickable */
+        .td-levels {
+            cursor: pointer;
+            font-weight: 700;
+            color: #38bdf8;
+            transition: all 0.15s;
+        }
+
+        .td-levels:hover {
+            color: #fbbf24;
+            text-decoration: underline;
+        }
+
+        /* Live Spot Floating Row */
+        .tr-spot-row {
+            background: linear-gradient(90deg, #15803d 0%, #0369a1 50%, #b91c1c 100%) !important;
+            font-weight: 800;
+            text-align: center;
+            color: #ffffff;
+        }
+
+        .tr-spot-row td {
+            padding: 5px 0 !important;
+            border-top: 2px solid #38bdf8 !important;
+            border-bottom: 2px solid #38bdf8 !important;
+        }
+
+        /* Scalp & Momentum Radar Card */
+        .scalp-card {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border: 1px solid rgba(255, 107, 0, 0.4);
+            border-radius: 10px;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+        }
+
+        /* Custom Modal Styling */
+        .modal-content-custom {
+            background: #171b26;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-primary);
+        }
+
+        .modal-header-custom {
+            border-bottom: 1px solid var(--border-color);
+            background: #131722;
+            padding: 12px 18px;
+        }
+
+        .modal-footer-custom {
+            border-top: 1px solid var(--border-color);
+            background: #131722;
+            padding: 10px 18px;
+        }
+
+        /* LogicTrader App Grid Modal Cards */
+        .app-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .app-grid {
+                grid-template-columns: repeat(3, 1fr);
+            }
+        }
+
+        .app-grid-card {
+            background: #1e2433;
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 8px;
+            text-align: center;
+            color: var(--text-primary);
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .app-grid-card i {
+            font-size: 1.4rem;
+            color: var(--accent-orange);
+            transition: transform 0.2s;
+        }
+
+        .app-grid-card:hover {
+            background: rgba(255, 107, 0, 0.15);
+            border-color: var(--accent-orange);
+            color: #ffffff;
+            transform: translateY(-2px);
+        }
+
+        .app-grid-card:hover i {
+            transform: scale(1.15);
+        }
+
+        .app-grid-card span {
+            font-size: 0.72rem;
+            font-weight: 600;
+        }
+
+        /* Utility badges */
+        .badge-orange { background: var(--accent-orange); color: #fff; }
+        .badge-call { background: var(--call-red); color: #fff; }
+        .badge-put { background: var(--put-green); color: #fff; }
+        .badge-strong { background: #16a34a; color: #fff; font-weight: 700; }
+        .badge-wtt { background: #f59e0b; color: #000; font-weight: 700; }
+
+        /* Floating Toast */
+        #toast-container {
+            position: fixed;
+            top: 65px;
+            right: 20px;
+            z-index: 9999;
+            width: 340px;
+        }
+    </style>
+</head>
+<body>
+
+<!-- Floating Toast Container -->
+<div id="toast-container"></div>
+
+<!-- Top Header Navbar -->
+<header class="top-navbar">
+    <div class="d-flex align-items-center gap-3">
+        <a href="/" class="brand-logo">
+            <span class="brand-bull-icon">🐂</span>
+            <div>
+                <span class="brand-title">LogicTrader <span style="color:#ffffff;">Crypto</span></span>
+                <span class="brand-sub">Delta Exchange LTP Calculator Pro</span>
+            </div>
+        </a>
+
+        <!-- Live Clock in IST -->
+        <div class="d-none d-md-flex align-items-center gap-2 bg-dark px-3 py-1 rounded border border-secondary" style="font-size: 0.78rem;">
+            <i class="fa-regular fa-clock text-warning"></i>
+            <span id="live-ist-clock" class="font-monospace text-light fw-bold">--:--:-- IST</span>
+        </div>
+    </div>
+
+    <!-- Center/Right Controls -->
+    <div class="d-flex align-items-center gap-2 flex-wrap">
+        <!-- Live Spot Price Ticker Button -->
+        <div class="d-flex align-items-center gap-2 bg-dark px-3 py-1 rounded border border-success" id="nav-spot-box">
+            <span class="pulse-dot"></span>
+            <span class="text-secondary small fw-bold" id="nav-spot-label">BTC:</span>
+            <span class="text-success fw-bold font-monospace fs-6" id="nav-spot-price">--.--</span>
+        </div>
+
+        <!-- Audio Voice Toggle -->
+        <button id="btn-voice-toggle" class="btn btn-outline-warning btn-sm" title="Voice Alerts Active" onclick="toggleVoiceAlerts()">
+            <i class="fa-solid fa-volume-high me-1"></i> <span class="d-none d-sm-inline" id="text-voice-status">Voice: ON</span>
+        </button>
+
+        <!-- Telegram Live Dispatch Pill -->
+        <button id="btn-telegram-quick-send" class="btn btn-outline-info btn-sm fw-bold position-relative" onclick="sendTelegramLiveSnapshot()" title="Send Live Levels Snapshot to Telegram">
+            <i class="fa-brands fa-telegram me-1"></i> <span class="d-none d-sm-inline">Send TG</span>
+            <span id="badge-tg-status" class="position-absolute top-0 start-100 translate-middle p-1 bg-success border border-light rounded-circle" style="width: 8px; height: 8px;"></span>
+        </button>
+
+        <!-- WhatsApp Settings Pill -->
+        <button class="btn btn-outline-success btn-sm fw-bold" onclick="openWhatsAppModal()" title="WhatsApp Alerts (CallMeBot)">
+            <i class="fa-brands fa-whatsapp"></i>
+        </button>
+
+        <!-- Mobile Apps Grid Button (Matching User's Screenshot) -->
+        <button class="btn btn-warning btn-sm text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#appsGridModal" title="Quick Tools Grid Menu">
+            <i class="fa-solid fa-grid-2 me-1"></i> <i class="fa-solid fa-table-cells"></i> Menu
+        </button>
+    </div>
+</header>
+
+<!-- Main App Container -->
+<div class="app-container">
+
+    <!-- Left Navigation Sidebar (Exact LogicTrader Style) -->
+    <nav class="sidebar-nav" id="sidebar-nav">
+        <button class="sidebar-item" onclick="scrollToSection('spot-ticker-banner')">
+            <i class="fa-solid fa-house"></i>
+            <span>Home</span>
+        </button>
+        <button class="sidebar-item active" id="side-btn-live-oc" onclick="setDashboardView('chain')">
+            <i class="fa-solid fa-table-cells"></i>
+            <span>Live OC</span>
+        </button>
+        <button class="sidebar-item" id="side-btn-chart" onclick="setDashboardView('chart')">
+            <i class="fa-solid fa-chart-candlestick"></i>
+            <span>Chart</span>
+        </button>
+        <button class="sidebar-item" id="side-btn-split" onclick="setDashboardView('split')">
+            <i class="fa-solid fa-table-columns"></i>
+            <span>Split</span>
+        </button>
+        <button class="sidebar-item" onclick="toggleScalpRadar()">
+            <i class="fa-solid fa-bolt text-warning"></i>
+            <span>Scalp</span>
+        </button>
+        <button class="sidebar-item" onclick="scrollToSection('card-920-setup')">
+            <i class="fa-solid fa-sun text-warning"></i>
+            <span>9:20 Setup</span>
+        </button>
+        <button class="sidebar-item" onclick="openDiversionStrategyMode()">
+            <i class="fa-solid fa-crosshairs text-info"></i>
+            <span>Positional</span>
+        </button>
+        <button class="sidebar-item" data-bs-toggle="modal" data-bs-target="#calculatorModal">
+            <i class="fa-solid fa-calculator text-success"></i>
+            <span>Calculator</span>
+        </button>
+        <button class="sidebar-item" onclick="openTelegramModal()">
+            <i class="fa-brands fa-telegram text-info"></i>
+            <span>Telegram</span>
+        </button>
+        <button class="sidebar-item" onclick="openWhatsAppModal()">
+            <i class="fa-brands fa-whatsapp text-success"></i>
+            <span>WhatsApp</span>
+        </button>
+        <button class="sidebar-item" onclick="scrollToSection('trade-audit-panel')">
+            <i class="fa-solid fa-clipboard-check text-warning"></i>
+            <span>Audit</span>
+        </button>
+        <button class="sidebar-item" onclick="openTelegramModal()">
+            <i class="fa-solid fa-gear"></i>
+            <span>Settings</span>
+        </button>
+    </nav>
+
+    <!-- Main Workspace -->
+    <main class="main-workspace">
+
+        <!-- Top Controls & Filters Pill Card -->
+        <div class="controls-card">
+            <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+                <!-- Left: Asset Selector & Expiry -->
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <div class="input-group input-group-sm" style="width: auto;">
+                        <span class="input-group-text bg-dark border-secondary text-warning fw-bold">
+                            <i class="fa-brands fa-bitcoin me-1"></i> Asset:
+                        </span>
+                        <select id="instrument-select" class="form-select form-select-sm bg-dark text-light border-secondary fw-bold" style="width: 170px;" onchange="onInstrumentChange()">
+                            <option value="BTC" selected>BTC Options (Bitcoin)</option>
+                            <option value="ETH">ETH Options (Ethereum)</option>
+                            <option value="SOL">SOL Options (Solana)</option>
+                        </select>
+                    </div>
+
+                    <div class="input-group input-group-sm" style="width: auto;">
+                        <span class="input-group-text bg-dark border-secondary text-info fw-bold">
+                            <i class="fa-regular fa-calendar me-1"></i> Expiry:
+                        </span>
+                        <select id="expiry-select" class="form-select form-select-sm bg-dark text-light border-secondary" style="width: 150px;" onchange="fetchOptionChainData()">
+                            <option value="">Auto Nearest</option>
+                        </select>
+                    </div>
+
+                    <!-- Strategy Mode Switcher -->
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-outline-warning active" id="btn-mode-live" onclick="setStrategyMode('live')">
+                            ⚡ Live COA
+                        </button>
+                        <button type="button" class="btn btn-outline-info" id="btn-mode-diversion" onclick="setStrategyMode('diversion')">
+                            🎯 Diversion
+                        </button>
+                        <button type="button" class="btn btn-outline-warning" id="btn-mode-920" onclick="setStrategyMode('920')">
+                            🌅 9:20 Setup
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Right: View Mode Icons & Refresh -->
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                    <span class="text-muted small fw-bold d-none d-lg-inline">View:</span>
+                    <div class="btn-group btn-group-sm" role="group">
+                        <button class="btn btn-outline-info" id="btn-view-chart" onclick="setDashboardView('chart')" title="Only Chart View">
+                            <i class="fa-solid fa-chart-candlestick"></i> Chart
+                        </button>
+                        <button class="btn btn-outline-info" id="btn-view-chain" onclick="setDashboardView('chain')" title="Only Option Chain View">
+                            <i class="fa-solid fa-table-cells"></i> Chain
+                        </button>
+                        <button class="btn btn-info active" id="btn-view-split" onclick="setDashboardView('split')" title="Split View (Chart + Table)">
+                            <i class="fa-solid fa-table-columns"></i> Split
+                        </button>
+                    </div>
+
+                    <button class="btn btn-primary btn-sm fw-bold px-3" id="btn-refresh" onclick="fetchOptionChainData()" title="Refresh Live Data">
+                        <i class="fa-solid fa-rotate me-1" id="icon-refresh"></i> Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Spot & Reversal Ticker Banner (LogicTrader Style in screenshot) -->
+        <div class="spot-ticker-banner" id="spot-ticker-banner">
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <div class="spot-badge-pill">
+                    <span class="pulse-dot"></span>
+                    <span>SPOT:</span>
+                    <span id="banner-spot-price">$--.--</span>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 small">
+                    <span class="text-secondary fw-bold">FT:</span>
+                    <span class="text-light fw-bold font-monospace" id="banner-ft-price">$--.--</span>
+                    <span class="text-secondary">|</span>
+                    <span class="text-secondary fw-bold">BASIS:</span>
+                    <span class="font-monospace" id="banner-basis-price">--.--</span>
+                </div>
+            </div>
+
+            <!-- Reversal Bounds & COA Scenario Pill -->
+            <div class="d-flex align-items-center gap-3 flex-wrap small">
+                <div>
+                    <span class="text-success fw-bold"><i class="fa-solid fa-arrow-turn-up me-1"></i>EOS:</span>
+                    <span class="text-success fw-bold font-monospace" id="banner-eos-price">$--.--</span>
+                </div>
+                <div>
+                    <span class="text-danger fw-bold"><i class="fa-solid fa-arrow-turn-down me-1"></i>EOR:</span>
+                    <span class="text-danger fw-bold font-monospace" id="banner-eor-price">$--.--</span>
+                </div>
+                <div>
+                    <span class="text-info fw-bold">PCR:</span>
+                    <span class="text-light fw-bold font-monospace" id="banner-pcr-val">--.--</span>
+                </div>
+                <span class="badge bg-secondary px-2 py-1" id="banner-scenario-badge">NORMAL COA</span>
+            </div>
+        </div>
+
+        <!-- SCALPING & MOMENTUM RADAR PANEL (NEW FEATURE) -->
+        <div class="scalp-card d-none" id="scalp-radar-panel">
+            <div class="d-flex align-items-center justify-content-between mb-2 flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-bolt text-warning fs-5"></i>
+                    <h6 class="m-0 text-warning fw-bold">⚡ 1-Minute Crypto Scalping & Momentum Radar</h6>
+                </div>
+                <span class="badge bg-warning text-dark fw-bold px-3 py-1" id="scalp-signal-badge">ANALYZING MOMENTUM...</span>
+            </div>
+            <div class="row g-2 text-center small">
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded bg-dark border border-secondary">
+                        <small class="text-secondary d-block">Distance to EOS (Call)</small>
+                        <strong class="text-success fs-6" id="scalp-dist-eos">-- pts</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded bg-dark border border-secondary">
+                        <small class="text-secondary d-block">Distance to EOR (Put)</small>
+                        <strong class="text-danger fs-6" id="scalp-dist-eor">-- pts</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded bg-dark border border-secondary">
+                        <small class="text-secondary d-block">Call Buy Entry (CE)</small>
+                        <strong class="text-info fs-6" id="scalp-rec-ce">--</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-2 rounded bg-dark border border-secondary">
+                        <small class="text-secondary d-block">Put Buy Entry (PE)</small>
+                        <strong class="text-warning fs-6" id="scalp-rec-pe">--</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MAIN SPLIT WORKSPACE: TradingView Chart + LogicTrader Option Chain -->
+        <div class="split-view-container" id="main-split-wrapper">
+
+            <!-- 1. TradingView Lightweight Chart Container (FIXED REAL CANDLES) -->
+            <div class="chart-card" id="chart-section-card">
+                <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom border-secondary flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-chart-candlestick text-warning fs-5"></i>
+                        <span class="fw-bold text-light" id="chart-title">BTC/USD (Delta Exchange Live)</span>
+                        <span class="badge bg-secondary font-monospace" id="chart-timeframe-tag">1m</span>
+                    </div>
+
+                    <!-- Timeframe buttons & Lines filter -->
+                    <div class="d-flex align-items-center gap-1">
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-outline-secondary active btn-sm py-0 px-2" id="tf-1m" onclick="setChartResolution('1')">1m</button>
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" id="tf-5m" onclick="setChartResolution('5')">5m</button>
+                            <button class="btn btn-outline-secondary btn-sm py-0 px-2" id="tf-15m" onclick="setChartResolution('15')">15m</button>
+                        </div>
+                        <button class="btn btn-outline-secondary btn-sm py-0 px-2 ms-2" onclick="chart && chart.timeScale().fitContent()" title="Reset Chart Zoom">
+                            <i class="fa-solid fa-arrows-to-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="tv-chart-container"></div>
+
+                <!-- Horizontal Reversal Legend Footer -->
+                <div class="d-flex align-items-center justify-content-between mt-2 pt-1 border-top border-secondary small text-muted flex-wrap gap-2" style="font-size:0.7rem;">
+                    <div><span class="text-success fw-bold">─── EOS:</span> <span id="leg-eos" class="font-monospace text-light">--</span></div>
+                    <div><span class="text-danger fw-bold">─── EOR:</span> <span id="leg-eor" class="font-monospace text-light">--</span></div>
+                    <div><span class="text-warning fw-bold">┄┄┄ UR:</span> <span id="leg-ur" class="font-monospace text-light">--</span></div>
+                    <div><span class="text-info fw-bold">┄┄┄ US:</span> <span id="leg-us" class="font-monospace text-light">--</span></div>
+                    <div><span class="text-light fw-bold">● Spot:</span> <span id="leg-spot" class="font-monospace text-warning">--</span></div>
+                </div>
+            </div>
+
+            <!-- 2. LogicTrader Style Option Chain Table Card -->
+            <div class="chain-card" id="chain-section-card">
+                <div class="d-flex align-items-center justify-content-between mb-2 pb-2 border-bottom border-secondary flex-wrap gap-2">
+                    <div class="d-flex align-items-center gap-2">
+                        <i class="fa-solid fa-table-cells text-warning fs-5"></i>
+                        <span class="fw-bold text-light">Option Chain (COA Matrix)</span>
+                        <span class="badge bg-success font-monospace" id="chain-spot-tag">SPOT: --</span>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 small">
+                        <span class="badge bg-danger-subtle text-danger border border-danger px-2" id="badge-res-summary">Res: --</span>
+                        <span class="badge bg-success-subtle text-success border border-success px-2" id="badge-supp-summary">Supp: --</span>
+                    </div>
+                </div>
+
+                <!-- Table Container -->
+                <div class="table-responsive-custom">
+                    <table class="table-chain text-center" id="option-chain-table">
+                        <thead>
+                            <!-- Super Headers -->
+                            <tr>
+                                <th colspan="4" class="th-call-super" id="super-header-call">
+                                    <i class="fa-solid fa-arrow-trend-down me-1"></i> CALL OPTION (RESISTANCE)
+                                </th>
+                                <th class="th-strike-super">
+                                    STRIKE
+                                </th>
+                                <th colspan="4" class="th-put-super" id="super-header-put">
+                                    PUT OPTION (SUPPORT) <i class="fa-solid fa-arrow-trend-up ms-1"></i>
+                                </th>
+                            </tr>
+                            <!-- Sub Columns Matching LogicTrader Screenshot -->
+                            <tr>
+                                <th class="th-sub-call" style="width: 10%;">COI</th>
+                                <th class="th-sub-call" style="width: 11%;">OI</th>
+                                <th class="th-sub-call" style="width: 14%;">VOLUME</th>
+                                <th class="th-sub-call" style="width: 15%;">LEVELS (DIV)</th>
+                                
+                                <th class="th-sub-strike" style="width: 10%;">STRIKE</th>
+                                
+                                <th class="th-sub-put" style="width: 15%;">LEVELS (DIV)</th>
+                                <th class="th-sub-put" style="width: 14%;">VOLUME</th>
+                                <th class="th-sub-put" style="width: 11%;">OI</th>
+                                <th class="th-sub-put" style="width: 10%;">COI</th>
+                            </tr>
+                        </thead>
+                        <tbody id="table-body">
+                            <tr>
+                                <td colspan="9" class="py-5 text-center text-muted">
+                                    <i class="fa-solid fa-spinner fa-spin me-2 fs-5"></i> Loading live option chain data from Delta Exchange...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- 3. DEDICATED 9:20 AM STRATEGY PANEL (Dr. Vinay Prakash Tiwari Setup) -->
+        <div class="card p-3 mb-3 border-warning d-none" id="card-920-setup" style="background: var(--bg-card);">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border-bottom border-secondary pb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-sun text-warning fs-4"></i>
+                    <div>
+                        <h5 class="m-0 text-warning fw-bold">🌅 Dr. Vinay Prakash Tiwari 9:20 AM Morning Reversal Strategy</h5>
+                        <small class="text-muted" id="text-920-timestamp">Base Frozen Snapshot: Locked @ 09:20:00 AM IST</small>
+                    </div>
+                </div>
+                <span class="badge bg-success p-2">9:20 STRATEGY ACTIVE</span>
+            </div>
+            <div class="row g-2 text-center font-monospace">
+                <div class="col-6 col-md-2">
+                    <div class="p-2 rounded bg-dark border border-secondary">
+                        <small class="text-secondary d-block">Frozen Spot</small>
+                        <strong class="text-info fs-6" id="val-920-spot">--</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="p-2 rounded bg-dark border border-warning">
+                        <small class="text-warning d-block">9:20 R2 (Upper)</small>
+                        <strong class="text-warning fs-6" id="val-920-r2">--</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="p-2 rounded bg-dark border border-danger">
+                        <small class="text-danger d-block">9:20 R1 (EOR)</small>
+                        <strong class="text-danger fs-6" id="val-920-r1">--</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="p-2 rounded bg-dark border border-light">
+                        <small class="text-light d-block">Mid-Pivot</small>
+                        <strong class="text-warning fs-6" id="val-920-mid">--</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="p-2 rounded bg-dark border border-success">
+                        <small class="text-success d-block">9:20 S1 (EOS)</small>
+                        <strong class="text-success fs-6" id="val-920-s1">--</strong>
+                    </div>
+                </div>
+                <div class="col-6 col-md-2">
+                    <div class="p-2 rounded bg-dark border border-info">
+                        <small class="text-info d-block">9:20 S2 (Deep)</small>
+                        <strong class="text-info fs-6" id="val-920-s2">--</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 4. AUTOMATED TRADE AUDIT & PERFORMANCE TRACKER PANEL -->
+        <div class="card p-3 mb-3 border-warning" id="trade-audit-panel" style="background: var(--bg-card);">
+            <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2 border-bottom border-secondary pb-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="fa-solid fa-clipboard-check text-warning fs-4"></i>
+                    <div>
+                        <h5 class="m-0 text-warning fw-bold">📋 Automated Trade Audit & Live Win Rate Tracker</h5>
+                        <small class="text-muted">Auto-logs EOS Bullish & EOR Bearish reversals within 0.3% buffer | Tracks Target vs SL</small>
+                    </div>
+                </div>
+                <button class="btn btn-outline-warning btn-sm" onclick="loadTradeAuditData(true)">
+                    <i class="fa-solid fa-rotate me-1"></i> Sync & Check Now
+                </button>
+            </div>
+
+            <!-- Top Summary Cards -->
+            <div class="row g-2 text-center mb-3">
+                <div class="col-6 col-md-3">
+                    <div class="p-3 rounded bg-dark border border-secondary">
+                        <small class="text-secondary fw-bold d-block">TOTAL SETUPS</small>
+                        <div class="fw-bold text-info fs-4" id="stat-total-setups">0</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-3 rounded bg-dark border border-success">
+                        <small class="text-success fw-bold d-block">TARGET HITS</small>
+                        <div class="fw-bold text-success fs-4" id="stat-target-hits">0 <span class="badge bg-success fs-6" id="stat-win-rate">0%</span></div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-3 rounded bg-dark border border-danger">
+                        <small class="text-danger fw-bold d-block">SL HITS</small>
+                        <div class="fw-bold text-danger fs-4" id="stat-sl-hits">0</div>
+                    </div>
+                </div>
+                <div class="col-6 col-md-3">
+                    <div class="p-3 rounded bg-dark border border-warning">
+                        <small class="text-warning fw-bold d-block">ACTIVE TRADES</small>
+                        <div class="fw-bold text-warning fs-4" id="stat-active-trades">0</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Audit Log Table -->
+            <div class="table-responsive" style="max-height: 380px; overflow-y: auto;">
+                <table class="table table-dark table-hover table-bordered m-0 align-middle text-center small" id="audit-table">
+                    <thead>
+                        <tr>
+                            <th>Time (IST)</th>
+                            <th>Asset</th>
+                            <th>Setup</th>
+                            <th>Entry</th>
+                            <th>Target</th>
+                            <th>Stop Loss</th>
+                            <th>Outcome</th>
+                            <th>Duration</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="audit-table-body">
+                        <tr><td colspan="9" class="text-muted py-3">Loading trade audit logs...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODALS SECTION -->
+<!-- ========================================================================= -->
+
+<!-- 1. QUICK APPS GRID MODAL (Exact Replica of Mobile Grid in User's Screenshot) -->
+<div class="modal fade" id="appsGridModal" tabindex="-1" aria-labelledby="appsGridModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom">
+            <div class="modal-header modal-header-custom">
+                <h6 class="modal-title fw-bold text-warning" id="appsGridModalLabel">
+                    <i class="fa-solid fa-table-cells me-2"></i>Welcome to LogicTrader Crypto Tools
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="app-grid">
+                    <div class="app-grid-card" onclick="setDashboardView('chain'); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-house"></i>
+                        <span>Home</span>
+                    </div>
+                    <div class="app-grid-card" onclick="setDashboardView('chain'); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-table-cells"></i>
+                        <span>Live OC</span>
+                    </div>
+                    <div class="app-grid-card" onclick="setDashboardView('chart'); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-chart-candlestick"></i>
+                        <span>Chart</span>
+                    </div>
+                    <div class="app-grid-card" onclick="toggleScalpRadar(); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-bolt"></i>
+                        <span>Scalp</span>
+                    </div>
+                    <div class="app-grid-card" onclick="openDiversionStrategyMode(); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-crosshairs"></i>
+                        <span>Positional</span>
+                    </div>
+                    <div class="app-grid-card" onclick="scrollToSection('spot-ticker-banner'); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-arrows-up-down"></i>
+                        <span>S/R OC</span>
+                    </div>
+                    <div class="app-grid-card" data-bs-toggle="modal" data-bs-target="#calculatorModal">
+                        <i class="fa-solid fa-calculator"></i>
+                        <span>Calculators</span>
+                    </div>
+                    <div class="app-grid-card" onclick="setDashboardView('split'); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-table-columns"></i>
+                        <span>Split Screen</span>
+                    </div>
+                    <div class="app-grid-card" onclick="openTelegramModal(); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-brands fa-telegram"></i>
+                        <span>Telegram</span>
+                    </div>
+                    <div class="app-grid-card" onclick="openWhatsAppModal(); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-brands fa-whatsapp"></i>
+                        <span>WhatsApp</span>
+                    </div>
+                    <div class="app-grid-card" onclick="scrollToSection('trade-audit-panel'); bootstrap.Modal.getInstance(document.getElementById('appsGridModal')).hide();">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                        <span>Audit Log</span>
+                    </div>
+                    <div class="app-grid-card" onclick="testHindiVoice();">
+                        <i class="fa-solid fa-volume-high"></i>
+                        <span>Hindi Voice</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 2. STRIKE DIVERSION DETAIL MODAL -->
+<div class="modal fade" id="diversionDetailModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom border-info">
+            <div class="modal-header modal-header-custom">
+                <h6 class="modal-title text-info fw-bold">
+                    <i class="fa-solid fa-arrows-split-up-and-left me-2"></i>स्ट्राइक डाइवर्जन रिवर्सल एनालिसिस
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="text-center p-3 rounded mb-3 bg-dark border border-secondary">
+                    <span class="small text-secondary fw-bold text-uppercase" id="div-modal-strike-title">Strike Diversion</span>
+                    <div class="fs-2 fw-bold text-warning font-monospace mt-1" id="div-modal-level">--.--</div>
+                    <small class="text-muted" id="div-modal-bs-level">Implied Reversal Level</small>
+                </div>
+                <div class="p-3 rounded bg-dark border border-secondary">
+                    <h6 class="text-info fw-bold mb-2"><i class="fa-solid fa-compass me-2"></i>ट्रेडिंग निर्देश (Action Directive):</h6>
+                    <p class="small text-light mb-2" id="div-modal-explanation">मार्केट जब इस लेवल पर आएगा तो रिवर्सल संभावित है।</p>
+                    <div class="d-flex justify-content-between small text-muted border-top border-secondary pt-2">
+                        <span><strong>Entry:</strong> <span class="text-light font-monospace" id="div-modal-entry">--</span></span>
+                        <span><strong>Target:</strong> <span class="text-success font-monospace" id="div-modal-target">--</span></span>
+                        <span><strong>SL:</strong> <span class="text-danger font-monospace" id="div-modal-sl">--</span></span>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-custom justify-content-between">
+                <button type="button" class="btn btn-outline-info btn-sm" onclick="plotModalLineOnChart()">
+                    <i class="fa-solid fa-chart-line me-1"></i> चार्ट पर लाइन ड्रा करें
+                </button>
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 3. BLACK-SCHOLES GREEK CALCULATOR MODAL (NEW FEATURE) -->
+<div class="modal fade" id="calculatorModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content modal-content-custom border-success">
+            <div class="modal-header modal-header-custom">
+                <h6 class="modal-title text-success fw-bold">
+                    <i class="fa-solid fa-calculator me-2"></i>Black-Scholes Greek & Volatility Calculator
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-3">
+                <div class="row g-2 mb-3">
+                    <div class="col-6">
+                        <label class="small text-secondary fw-bold">Spot Price ($)</label>
+                        <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" id="bs-calc-spot" value="77850">
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-secondary fw-bold">Strike Price ($)</label>
+                        <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" id="bs-calc-strike" value="78000">
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-secondary fw-bold">IV (%)</label>
+                        <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" id="bs-calc-iv" value="45">
+                    </div>
+                    <div class="col-6">
+                        <label class="small text-secondary fw-bold">Days to Expiry (DTE)</label>
+                        <input type="number" class="form-control form-control-sm bg-dark text-light border-secondary" id="bs-calc-dte" value="2">
+                    </div>
+                </div>
+                <div class="p-3 rounded bg-dark border border-secondary text-center">
+                    <button class="btn btn-success btn-sm fw-bold w-100 mb-2" onclick="calculateGreeks()">
+                        <i class="fa-solid fa-bolt me-1"></i> Calculate Option Price & Greeks
+                    </button>
+                    <div class="row g-2 text-center small mt-1 font-monospace">
+                        <div class="col-6">
+                            <span class="text-secondary d-block">Call Fair Price</span>
+                            <strong class="text-success fs-6" id="bs-out-call">--</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="text-secondary d-block">Put Fair Price</span>
+                            <strong class="text-danger fs-6" id="bs-out-put">--</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="text-secondary d-block">Delta (Call / Put)</span>
+                            <strong class="text-info" id="bs-out-delta">-- / --</strong>
+                        </div>
+                        <div class="col-6">
+                            <span class="text-secondary d-block">Theta (Decay/Day)</span>
+                            <strong class="text-warning" id="bs-out-theta">--</strong>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-custom">
+                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 4. TELEGRAM BOT SETTINGS MODAL -->
+<div class="modal fade" id="telegramSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content modal-content-custom border-info">
+            <div class="modal-header modal-header-custom">
+                <h6 class="modal-title text-info fw-bold">
+                    <i class="fa-brands fa-telegram me-2 fs-5"></i>Telegram Bot Notification Engine (@Bhartiyestockalertbot)
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="telegram-feedback-banner" class="alert d-none mb-3 py-2 px-3 small"></div>
+
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <div class="p-3 rounded bg-dark border border-secondary h-100">
+                            <h6 class="text-info fw-bold mb-3"><i class="fa-solid fa-gear me-2"></i>Bot Configuration</h6>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="tg-enabled" checked>
+                                <label class="form-check-label fw-bold" for="tg-enabled">Telegram Alerts Active</label>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary fw-bold mb-1">Telegram Bot Token</label>
+                                <div class="input-group input-group-sm">
+                                    <input type="password" class="form-control bg-dark text-light border-secondary" id="tg-token" placeholder="9074898916:AAFRMxWBsl4d3rO6uoo-dJ_9UQPJut_8chQ">
+                                    <button class="btn btn-outline-secondary" type="button" onclick="toggleTgTokenVisibility()">
+                                        <i class="fa-regular fa-eye" id="icon-tg-eye"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary fw-bold mb-1">Telegram Chat ID</label>
+                                <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="tg-chatid" placeholder="5246742802">
+                            </div>
+                            <div class="p-2 rounded bg-secondary-subtle border border-info small text-light mt-2">
+                                <div class="d-flex align-items-center justify-content-between">
+                                    <span><i class="fa-solid fa-robot me-1 text-info"></i><strong>Connected Bot:</strong> <span id="tg-bot-name-text">@Bhartiyestockalertbot</span></span>
+                                    <span class="badge bg-success">ACTIVE</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="p-3 rounded bg-dark border border-secondary h-100">
+                            <h6 class="text-warning fw-bold mb-2"><i class="fa-solid fa-circle-question me-2"></i>Telegram Commands & Alerts</h6>
+                            <div class="small text-light" style="line-height: 1.6;">
+                                <p class="mb-2">Aap Telegram me bot <strong>@Bhartiyestockalertbot</strong> ko message bhej kar turant live levels manga sakte hain:</p>
+                                <ul class="ps-3 mb-2 font-monospace" style="font-size:0.75rem;">
+                                    <li><b>/btc</b> - Bitcoin Live Spot, EOS, EOR</li>
+                                    <li><b>/eth</b> - Ethereum Live Spot, EOS, EOR</li>
+                                    <li><b>/levels</b> - BTC & ETH dono ke levels</li>
+                                    <li><b>/trades</b> - Active trades & Win Rate report</li>
+                                </ul>
+                                <div class="p-2 rounded bg-secondary-subtle border border-warning text-warning small mt-2">
+                                    <i class="fa-solid fa-shield-halved me-1"></i>Automatic Entry & Exit alerts are 100% active!
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-custom justify-content-between">
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-info btn-sm" id="btn-test-telegram" onclick="testTelegramAlert()">
+                        <i class="fa-solid fa-paper-plane me-1"></i> 🧪 Send Test
+                    </button>
+                    <button type="button" class="btn btn-outline-warning btn-sm" id="btn-snap-telegram" onclick="sendTelegramLiveSnapshot()">
+                        <i class="fa-solid fa-bolt me-1"></i> 📲 Send Live Levels
+                    </button>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-info btn-sm fw-bold text-dark" onclick="saveTelegramSettings()">
+                        <i class="fa-solid fa-floppy-disk me-1"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 5. WHATSAPP ALERTS MODAL -->
+<div class="modal fade" id="whatsappSettingsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg">
+        <div class="modal-content modal-content-custom border-success">
+            <div class="modal-header modal-header-custom">
+                <h6 class="modal-title text-success fw-bold">
+                    <i class="fa-brands fa-whatsapp me-2 fs-5"></i>WhatsApp Notification Alerts (CallMeBot)
+                </h6>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-4">
+                <div id="whatsapp-feedback-banner" class="alert d-none mb-3 py-2 px-3 small"></div>
+                <div class="row g-3">
+                    <div class="col-12 col-md-6">
+                        <div class="p-3 rounded bg-dark border border-secondary h-100">
+                            <h6 class="text-success fw-bold mb-3"><i class="fa-solid fa-gear me-2"></i>CallMeBot Config</h6>
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" id="wa-enabled" checked>
+                                <label class="form-check-label fw-bold" for="wa-enabled">WhatsApp Active</label>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary fw-bold mb-1">Phone Number (+91...)</label>
+                                <input type="text" class="form-control form-control-sm bg-dark text-light border-secondary" id="wa-phone" placeholder="+919876543210">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-secondary fw-bold mb-1">CallMeBot API Key</label>
+                                <input type="password" class="form-control form-control-sm bg-dark text-light border-secondary" id="wa-apikey" placeholder="Enter API Key">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6">
+                        <div class="p-3 rounded bg-dark border border-secondary h-100">
+                            <h6 class="text-warning fw-bold mb-2"><i class="fa-solid fa-circle-info me-2"></i>Setup Instructions</h6>
+                            <p class="small text-light" style="line-height:1.6;">
+                                1. WhatsApp par <strong>+34 644 44 44 99</strong> ko ye message bhejo:<br>
+                                <code>I allow callmebot to send me messages</code><br>
+                                2. Bot reply me API Key bhejega. Wahi key yahan daal kar save karein.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer modal-footer-custom justify-content-between">
+                <button type="button" class="btn btn-outline-info btn-sm" onclick="testWhatsAppAlert()">
+                    <i class="fa-solid fa-paper-plane me-1"></i> Send Test Message
+                </button>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success btn-sm fw-bold" onclick="saveWhatsAppSettings()">
+                        <i class="fa-solid fa-floppy-disk me-1"></i> Save Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Bootstrap 5.3 Bundle JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+    // State Variables
+    let currentInstrument = "BTC";
+    let currentExpiry = "";
+    let currentResolution = "1";
+    let activeViewMode = "split"; // 'chart' | 'chain' | 'split'
+    let currentStrategyMode = "live";
+    let voiceAlertsEnabled = true;
+    let autoRefreshTimer = null;
+    let spotTickerTimer = null;
+
+    // TradingView Lightweight Chart Variables
+    let chart = null;
+    let candlestickSeries = null;
+    let currentCandle = null;
+    let activePriceLines = [];
+    let lastDashboardData = null;
+
+    // 1. Live IST Clock
+    function updateLiveClock() {
+        const now = new Date();
+        const options = { timeZone: "Asia/Kolkata", hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' };
+        const timeStr = now.toLocaleTimeString("en-IN", options);
+        const clockEl = document.getElementById("live-ist-clock");
+        if (clockEl) clockEl.innerText = `${timeStr} IST`;
+    }
+    setInterval(updateLiveClock, 1000);
+    updateLiveClock();
+
+    // 2. Initialize Lightweight Chart (Clean, In Sync, 100% Real Candles)
+    function initLightweightChart() {
+        const container = document.getElementById("tv-chart-container");
+        if (!container) return;
+        container.innerHTML = "";
+
+        chart = LightweightCharts.createChart(container, {
+            layout: {
+                background: { color: "#171b26" },
+                textColor: "#94a3b8",
+                fontSize: 11,
+                fontFamily: "'JetBrains Mono', monospace"
+            },
+            grid: {
+                vertLines: { color: "#1e2433" },
+                horzLines: { color: "#1e2433" }
+            },
+            crosshair: {
+                mode: LightweightCharts.CrosshairMode.Normal
+            },
+            rightPriceScale: {
+                borderColor: "#262b3d",
+                autoScale: true
+            },
+            timeScale: {
+                borderColor: "#262b3d",
+                timeVisible: true,
+                secondsVisible: false
+            }
+        });
+
+        candlestickSeries = chart.addCandlestickSeries({
+            upColor: "#22c55e",
+            downColor: "#ef4444",
+            borderUpColor: "#22c55e",
+            borderDownColor: "#ef4444",
+            wickUpColor: "#22c55e",
+            wickDownColor: "#ef4444"
+        });
+
+        // Resize Observer for dynamic responsiveness
+        const resizeObserver = new ResizeObserver(entries => {
+            if (entries[0] && chart) {
+                chart.applyOptions({
+                    width: entries[0].contentRect.width,
+                    height: entries[0].contentRect.height
+                });
+            }
+        });
+        resizeObserver.observe(container);
+    }
+
+    // 3. Load Real Candles Directly from Delta Exchange
+    async function loadChartCandles() {
+        if (!candlestickSeries) return;
+        const inst = document.getElementById("instrument-select")?.value || currentInstrument;
+        try {
+            const res = await fetch(`/api/chart-candles?instrument=${encodeURIComponent(inst)}&resolution=${currentResolution}&limit=120`);
+            const data = await res.json();
+            if (data.status === "success" && data.candles && data.candles.length > 0) {
+                candlestickSeries.setData(data.candles);
+                currentCandle = { ...data.candles[data.candles.length - 1] };
+                chart.timeScale().fitContent();
+
+                // Update chart title watermark
+                const titleEl = document.getElementById("chart-title");
+                if (titleEl) titleEl.innerText = `${inst}/USD (Delta Exchange Live)`;
+            }
+        } catch (err) {
+            console.warn("Could not load chart candles:", err);
+        }
+    }
+
+    // 4. Update Candle with Real-Time Spot Price Tick
+    function updateSpotPriceAndCandle(spot) {
+        if (!candlestickSeries || !spot || spot <= 0) return;
+        const nowUnix = Math.floor(Date.now() / 1000);
+        const resSec = parseInt(currentResolution) * 60;
+        const candleTime = Math.floor(nowUnix / resSec) * resSec;
+
+        if (!currentCandle) {
+            currentCandle = { time: candleTime, open: spot, high: spot, low: spot, close: spot };
+            candlestickSeries.update(currentCandle);
+            return;
+        }
+
+        // If candle time matches current period
+        if (currentCandle.time === candleTime) {
+            currentCandle.close = spot;
+            currentCandle.high = Math.max(currentCandle.high, spot);
+            currentCandle.low = Math.min(currentCandle.low, spot);
+            candlestickSeries.update(currentCandle);
+        } else if (candleTime > currentCandle.time) {
+            // New candle started
+            currentCandle = {
+                time: candleTime,
+                open: currentCandle.close,
+                high: Math.max(currentCandle.close, spot),
+                low: Math.min(currentCandle.close, spot),
+                close: spot
+            };
+            candlestickSeries.update(currentCandle);
+        }
+    }
+
+    // 5. Change Chart Resolution
+    function setChartResolution(res) {
+        currentResolution = res;
+        ['1m', '5m', '15m'].forEach(t => {
+            const btn = document.getElementById(`tf-${t}`);
+            if (btn) btn.classList.remove('active');
+        });
+        const activeBtn = document.getElementById(`tf-${res}m`);
+        if (activeBtn) activeBtn.classList.add('active');
+
+        const tag = document.getElementById('chart-timeframe-tag');
+        if (tag) tag.innerText = `${res}m`;
+
+        loadChartCandles();
+    }
+
+    // 6. Draw Horizontal Reversal Lines on Chart
+    function updateChartReversalLines(analysis, spot) {
+        if (!candlestickSeries || !analysis) return;
+
+        // Clear existing lines
+        activePriceLines.forEach(l => {
+            try { candlestickSeries.removePriceLine(l); } catch(e) {}
+        });
+        activePriceLines = [];
+
+        const eos = parseFloat(analysis.eos?.eos_price || 0);
+        const eor = parseFloat(analysis.eor?.eor_price || 0);
+        const ur = parseFloat(analysis.ur?.ur_price || 0);
+        const us = parseFloat(analysis.us?.us_price || 0);
+
+        if (eos > 0) {
+            activePriceLines.push(candlestickSeries.createPriceLine({
+                price: eos,
+                color: '#22c55e',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                title: 'EOS (Support)'
+            }));
+            document.getElementById('leg-eos').innerText = `$${eos.toLocaleString()}`;
+        }
+        if (eor > 0) {
+            activePriceLines.push(candlestickSeries.createPriceLine({
+                price: eor,
+                color: '#ef4444',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Dashed,
+                title: 'EOR (Resistance)'
+            }));
+            document.getElementById('leg-eor').innerText = `$${eor.toLocaleString()}`;
+        }
+        if (ur > 0) {
+            activePriceLines.push(candlestickSeries.createPriceLine({
+                price: ur,
+                color: '#f59e0b',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                title: 'UR (Upper Res)'
+            }));
+            document.getElementById('leg-ur').innerText = `$${ur.toLocaleString()}`;
+        }
+        if (us > 0) {
+            activePriceLines.push(candlestickSeries.createPriceLine({
+                price: us,
+                color: '#0284c7',
+                lineWidth: 1,
+                lineStyle: LightweightCharts.LineStyle.Dotted,
+                title: 'US (Ult Supp)'
+            }));
+            document.getElementById('leg-us').innerText = `$${us.toLocaleString()}`;
+        }
+        if (spot > 0) {
+            document.getElementById('leg-spot').innerText = `$${spot.toLocaleString()}`;
+        }
+    }
+
+    // 7. Format Large Numbers (K, M)
+    function formatNumber(val) {
+        if (val === null || val === undefined || isNaN(val)) return "-";
+        val = Number(val);
+        if (Math.abs(val) >= 1000000) return (val / 1000000).toFixed(2) + "M";
+        if (Math.abs(val) >= 1000) return (val / 1000).toFixed(1) + "K";
+        return val.toLocaleString();
+    }
+
+    // 8. Fetch Expiries
+    async function loadExpiries() {
+        const inst = document.getElementById("instrument-select")?.value || "BTC";
+        try {
+            const resp = await fetch(`/api/expiries?instrument=${encodeURIComponent(inst)}`);
+            const data = await resp.json();
+            const select = document.getElementById("expiry-select");
+            if (data.status === "success" && data.expiries && select) {
+                select.innerHTML = '<option value="">Auto Nearest</option>';
+                data.expiries.forEach((exp, idx) => {
+                    const opt = document.createElement("option");
+                    opt.value = exp;
+                    opt.innerText = `${exp} ${idx === 0 ? '(Nearest)' : ''}`;
+                    select.appendChild(opt);
+                });
+            }
+        } catch (e) {
+            console.warn("Could not fetch expiries:", e);
+        }
+    }
+
+    // 9. Fetch Full Option Chain Data & Render LogicTrader Table
+    async function fetchOptionChainData() {
+        const inst = document.getElementById("instrument-select")?.value || "BTC";
+        const exp = document.getElementById("expiry-select")?.value || "";
+        const iconRefresh = document.getElementById("icon-refresh");
+        if (iconRefresh) iconRefresh.classList.add("fa-spin");
+
+        try {
+            const resp = await fetch(`/api/option-chain?instrument=${encodeURIComponent(inst)}&expiry=${encodeURIComponent(exp)}`);
+            const data = await resp.json();
+            if (data.status === "success") {
+                lastDashboardData = data;
+                renderDashboardData(data);
+            }
+        } catch (err) {
+            console.error("Option chain fetch error:", err);
+        } finally {
+            if (iconRefresh) iconRefresh.classList.remove("fa-spin");
+        }
+    }
+
+    // 10. Render LogicTrader Option Chain Table & Tickers
+    function renderDashboardData(data) {
+        const meta = data.meta || {};
+        const analysis = data.analysis || {};
+        const records = data.records || [];
+        const spot = parseFloat(meta.spot_price || analysis.spot_price || 0);
+
+        // Update Ticker Banner
+        const bannerSpot = document.getElementById("banner-spot-price");
+        if (bannerSpot) bannerSpot.innerText = `$${spot.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+        const navSpot = document.getElementById("nav-spot-price");
+        if (navSpot) navSpot.innerText = `$${spot.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+
+        const navSpotLabel = document.getElementById("nav-spot-label");
+        if (navSpotLabel) navSpotLabel.innerText = `${meta.symbol || 'BTC'}:`;
+
+        const chainSpotTag = document.getElementById("chain-spot-tag");
+        if (chainSpotTag) chainSpotTag.innerText = `SPOT: $${spot.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+
+        // Futures Basis approximation
+        const bannerFt = document.getElementById("banner-ft-price");
+        const bannerBasis = document.getElementById("banner-basis-price");
+        if (bannerFt) bannerFt.innerText = `$${(spot - 12.5).toFixed(2)}`;
+        if (bannerBasis) bannerBasis.innerText = `-$12.50`;
+
+        // EOS, EOR, PCR
+        const eosP = parseFloat(analysis.eos?.eos_price || 0);
+        const eorP = parseFloat(analysis.eor?.eor_price || 0);
+        const pcrVal = parseFloat(analysis.pcr || 0);
+
+        if (document.getElementById("banner-eos-price")) document.getElementById("banner-eos-price").innerText = `$${eosP.toLocaleString()}`;
+        if (document.getElementById("banner-eor-price")) document.getElementById("banner-eor-price").innerText = `$${eorP.toLocaleString()}`;
+        if (document.getElementById("banner-pcr-val")) document.getElementById("banner-pcr-val").innerText = pcrVal.toFixed(2);
+
+        // Scenario & Status
+        const scenarioBadge = document.getElementById("banner-scenario-badge");
+        if (scenarioBadge) {
+            const sc = analysis.coa_scenario?.name || "COA Analysis";
+            scenarioBadge.innerText = sc.toUpperCase();
+            scenarioBadge.className = sc.includes("Bullish") ? "badge bg-success" : (sc.includes("Bearish") ? "badge bg-danger" : "badge bg-secondary");
+        }
+
+        const resInfo = analysis.resistance || {};
+        const suppInfo = analysis.support || {};
+        if (document.getElementById("badge-res-summary")) {
+            document.getElementById("badge-res-summary").innerText = `Res: ${resInfo.primary_strike || '-'} (${resInfo.overall_status || 'STRONG'})`;
+        }
+        if (document.getElementById("badge-supp-summary")) {
+            document.getElementById("badge-supp-summary").innerText = `Supp: ${suppInfo.primary_strike || '-'} (${suppInfo.overall_status || 'STRONG'})`;
+        }
+
+        // Super Headers with Shiftings text
+        const superCall = document.getElementById("super-header-call");
+        if (superCall) {
+            superCall.innerHTML = `<i class="fa-solid fa-arrow-trend-down me-1"></i> CALL OPTION | RESISTANCE : ${resInfo.primary_strike || '-'} (${resInfo.overall_status || 'STRONG'})`;
+        }
+        const superPut = document.getElementById("super-header-put");
+        if (superPut) {
+            superPut.innerHTML = `PUT OPTION | SUPPORT : ${suppInfo.primary_strike || '-'} (${suppInfo.overall_status || 'STRONG'}) <i class="fa-solid fa-arrow-trend-up ms-1"></i>`;
+        }
+
+        // Update Chart Lines & Real Candle
+        updateChartReversalLines(analysis, spot);
+        updateSpotPriceAndCandle(spot);
+
+        // Update Scalp Radar
+        updateScalpRadar(spot, eosP, eorP, analysis);
+
+        // 11. Render Option Chain Table Rows
+        renderTableRows(records, spot, resInfo, suppInfo);
+    }
+
+    // Render Table Rows with LogicTrader Layout
+    function renderTableRows(records, spot, resInfo, suppInfo) {
+        const tbody = document.getElementById("table-body");
+        if (!tbody) return;
+        tbody.innerHTML = "";
+
+        if (!records || records.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="9" class="py-4 text-center text-muted">No option chain records available for selected expiry.</td></tr>';
+            return;
+        }
+
+        // Find ATM Strike
+        let atmStrike = 0;
+        let minDiff = Infinity;
+        records.forEach(r => {
+            const diff = Math.abs(r.strike_price - spot);
+            if (diff < minDiff) {
+                minDiff = diff;
+                atmStrike = r.strike_price;
+            }
+        });
+
+        // Filter 15 strikes above and below ATM for ultra-clean view
+        const atmIndex = records.findIndex(r => r.strike_price === atmStrike);
+        const startIdx = Math.max(0, atmIndex - 12);
+        const endIdx = Math.min(records.length, atmIndex + 13);
+        const displayedRecords = records.slice(startIdx, endIdx);
+
+        // Maximum values for percentages
+        const maxCallVol = Math.max(...displayedRecords.map(r => r.call_volume || 0), 1);
+        const maxCallOI = Math.max(...displayedRecords.map(r => r.call_oi || 0), 1);
+        const maxPutVol = Math.max(...displayedRecords.map(r => r.put_volume || 0), 1);
+        const maxPutOI = Math.max(...displayedRecords.map(r => r.put_oi || 0), 1);
+
+        let spotDividerInserted = false;
+
+        displayedRecords.forEach((r, idx) => {
+            const strike = r.strike_price;
+            const nextR = displayedRecords[idx + 1];
+
+            // Insert Floating Live Spot Divider between strikes
+            if (!spotDividerInserted && spot > 0 && nextR && strike <= spot && spot < nextR.strike_price) {
+                const spotTr = document.createElement("tr");
+                spotTr.className = "tr-spot-row";
+                spotTr.innerHTML = `
+                    <td colspan="9">
+                        <i class="fa-solid fa-crosshairs me-2 text-warning"></i>
+                        <span>LIVE SPOT TICKER: $${spot.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}</span>
+                    </td>
+                `;
+                tbody.appendChild(spotTr);
+                spotDividerInserted = true;
+            }
+
+            const isATM = (strike === atmStrike);
+            const isHighestCallVol = (r.call_volume === resInfo.highest_vol_val && resInfo.highest_vol_val > 0);
+            const isHighestCallOI = (r.call_oi === resInfo.highest_oi_val && resInfo.highest_oi_val > 0);
+            const is2ndCall = ((strike === resInfo.second_vol_strike && resInfo.vol_ratio_pct >= 75) || (strike === resInfo.second_oi_strike && resInfo.oi_ratio_pct >= 75));
+
+            const isHighestPutVol = (r.put_volume === suppInfo.highest_vol_val && suppInfo.highest_vol_val > 0);
+            const isHighestPutOI = (r.put_oi === suppInfo.highest_oi_val && suppInfo.highest_oi_val > 0);
+            const is2ndPut = ((strike === suppInfo.second_vol_strike && suppInfo.vol_ratio_pct >= 75) || (strike === suppInfo.second_oi_strike && suppInfo.oi_ratio_pct >= 75));
+
+            // Percentages
+            const callVolPct = Math.round((r.call_volume / maxCallVol) * 100);
+            const callOIPct = Math.round((r.call_oi / maxCallOI) * 100);
+            const putVolPct = Math.round((r.put_volume / maxPutVol) * 100);
+            const putOIPct = Math.round((r.put_oi / maxPutOI) * 100);
+
+            // Classes
+            const callVolClass = isHighestCallVol ? "cell-max-call" : (is2ndCall ? "cell-wtt-wtb" : "");
+            const callOIClass = isHighestCallOI ? "cell-max-call" : (is2ndCall ? "cell-wtt-wtb" : "");
+            const putVolClass = isHighestPutVol ? "cell-max-put" : (is2ndPut ? "cell-wtt-wtb" : "");
+            const putOIClass = isHighestPutOI ? "cell-max-put" : (is2ndPut ? "cell-wtt-wtb" : "");
+
+            const tr = document.createElement("tr");
+
+            tr.innerHTML = `
+                <!-- Call Side: COI | OI | VOLUME | LEVELS -->
+                <td class="${r.call_oi_change >= 0 ? 'text-success' : 'text-danger'}">
+                    <span class="cell-val">${r.call_oi_change >= 0 ? '+' : ''}${formatNumber(r.call_oi_change)}</span>
+                </td>
+                <td class="${callOIClass}">
+                    <span class="cell-val">${formatNumber(r.call_oi)}</span>
+                    <span class="cell-pct ${isHighestCallOI ? 'text-light' : ''}">${callOIPct}%</span>
+                </td>
+                <td class="${callVolClass}">
+                    <span class="cell-val">${formatNumber(r.call_volume)}</span>
+                    <span class="cell-pct ${isHighestCallVol ? 'text-light' : ''}">${callVolPct}%</span>
+                </td>
+                <td class="td-levels" onclick="openDiversionModal(${strike}, 'CALL', ${r.call_diversion || 0}, ${r.call_ltp || 0})">
+                    <span class="cell-val">${(r.call_diversion || 0).toFixed(1)}</span>
+                    <span class="cell-pct text-info">LTP: ${(r.call_ltp || 0).toFixed(2)}</span>
+                </td>
+
+                <!-- Center: STRIKE PRICE -->
+                <td class="${isATM ? 'td-atm-strike' : 'td-strike'}">
+                    <span>${strike.toLocaleString()}</span>
+                    ${isATM ? '<small class="d-block text-warning fw-bold" style="font-size:0.6rem;">ATM</small>' : ''}
+                </td>
+
+                <!-- Put Side: LEVELS | VOLUME | OI | COI -->
+                <td class="td-levels" onclick="openDiversionModal(${strike}, 'PUT', ${r.put_diversion || 0}, ${r.put_ltp || 0})">
+                    <span class="cell-val">${(r.put_diversion || 0).toFixed(1)}</span>
+                    <span class="cell-pct text-info">LTP: ${(r.put_ltp || 0).toFixed(2)}</span>
+                </td>
+                <td class="${putVolClass}">
+                    <span class="cell-val">${formatNumber(r.put_volume)}</span>
+                    <span class="cell-pct ${isHighestPutVol ? 'text-light' : ''}">${putVolPct}%</span>
+                </td>
+                <td class="${putOIClass}">
+                    <span class="cell-val">${formatNumber(r.put_oi)}</span>
+                    <span class="cell-pct ${isHighestPutOI ? 'text-light' : ''}">${putOIPct}%</span>
+                </td>
+                <td class="${r.put_oi_change >= 0 ? 'text-success' : 'text-danger'}">
+                    <span class="cell-val">${r.put_oi_change >= 0 ? '+' : ''}${formatNumber(r.put_oi_change)}</span>
+                </td>
+            `;
+
+            tbody.appendChild(tr);
+        });
+    }
+
+    // 12. Fast Spot Price Tracker (2-3 sec poll for real-time ticker and candle sync)
+    function startFastSpotTracker() {
+        if (spotTickerTimer) clearInterval(spotTickerTimer);
+        spotTickerTimer = setInterval(async () => {
+            const inst = document.getElementById("instrument-select")?.value || currentInstrument;
+            try {
+                const resp = await fetch(`/api/spot-price?instrument=${encodeURIComponent(inst)}`);
+                const data = await resp.json();
+                if (data.status === "success" && data.spot_price > 0) {
+                    const spot = parseFloat(data.spot_price);
+                    document.getElementById("nav-spot-price").innerText = `$${spot.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                    document.getElementById("banner-spot-price").innerText = `$${spot.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+                    updateSpotPriceAndCandle(spot);
+                }
+            } catch (e) {}
+        }, 3000);
+    }
+
+    // 13. Scalp Radar Update
+    function updateScalpRadar(spot, eos, eor, analysis) {
+        if (!spot || spot <= 0) return;
+        const distEos = eos > 0 ? (spot - eos).toFixed(1) : "-";
+        const distEor = eor > 0 ? (eor - spot).toFixed(1) : "-";
+
+        document.getElementById("scalp-dist-eos").innerText = `${distEos} pts`;
+        document.getElementById("scalp-dist-eor").innerText = `${distEor} pts`;
+        document.getElementById("scalp-rec-ce").innerText = eos > 0 ? `$${eos.toFixed(0)} (Call Buy)` : "-";
+        document.getElementById("scalp-rec-pe").innerText = eor > 0 ? `$${eor.toFixed(0)} (Put Buy)` : "-";
+
+        const badge = document.getElementById("scalp-signal-badge");
+        if (badge) {
+            if (eos > 0 && Math.abs(spot - eos) / eos <= 0.003) {
+                badge.innerText = "🟢 EOS REVERSAL: BUY CALL (CE)";
+                badge.className = "badge bg-success text-light fw-bold px-3 py-1";
+            } else if (eor > 0 && Math.abs(spot - eor) / eor <= 0.003) {
+                badge.innerText = "🔴 EOR REVERSAL: BUY PUT (PE)";
+                badge.className = "badge bg-danger text-light fw-bold px-3 py-1";
+            } else {
+                badge.innerText = "WAITING FOR KEY LEVEL RETEST";
+                badge.className = "badge bg-secondary text-light fw-bold px-3 py-1";
+            }
+        }
+    }
+
+    function toggleScalpRadar() {
+        const panel = document.getElementById("scalp-radar-panel");
+        if (panel) panel.classList.toggle("d-none");
+    }
+
+    // 14. View Mode Switcher: Chart | Chain | Split
+    function setDashboardView(mode) {
+        activeViewMode = mode;
+        const chartCard = document.getElementById("chart-section-card");
+        const chainCard = document.getElementById("chain-section-card");
+        const splitWrapper = document.getElementById("main-split-wrapper");
+
+        ['btn-view-chart', 'btn-view-chain', 'btn-view-split'].forEach(id => {
+            const b = document.getElementById(id);
+            if (b) b.classList.remove('active', 'btn-info');
+            if (b) b.classList.add('btn-outline-info');
+        });
+
+        const activeBtn = document.getElementById(`btn-view-${mode}`);
+        if (activeBtn) {
+            activeBtn.classList.add('active', 'btn-info');
+            activeBtn.classList.remove('btn-outline-info');
+        }
+
+        if (mode === "chart") {
+            chartCard.style.display = "flex";
+            chainCard.style.display = "none";
+            splitWrapper.style.gridTemplateColumns = "1fr";
+            chartCard.style.height = "700px";
+            if (chart) chart.timeScale().fitContent();
+        } else if (mode === "chain") {
+            chartCard.style.display = "none";
+            chainCard.style.display = "flex";
+            splitWrapper.style.gridTemplateColumns = "1fr";
+        } else {
+            // Split view
+            chartCard.style.display = "flex";
+            chainCard.style.display = "flex";
+            splitWrapper.style.gridTemplateColumns = window.innerWidth > 1200 ? "1fr 1fr" : "1fr";
+            chartCard.style.height = "520px";
+            if (chart) chart.timeScale().fitContent();
+        }
+    }
+
+    // 15. Strategy Modes
+    function setStrategyMode(mode) {
+        currentStrategyMode = mode;
+        const card920 = document.getElementById("card-920-setup");
+        if (card920) {
+            if (mode === "920") card920.classList.remove("d-none");
+            else card920.classList.add("d-none");
+        }
+    }
+
+    function openDiversionStrategyMode() {
+        setStrategyMode('diversion');
+        showToast("Diversion Mode", "Diversion Reversal Channels are highlighted in option chain.", "info");
+    }
+
+    function scrollToSection(id) {
+        const el = document.getElementById(id);
+        if (el) el.scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // 16. On Instrument Change
+    async function onInstrumentChange() {
+        const inst = document.getElementById("instrument-select")?.value || "BTC";
+        currentInstrument = inst;
+        await loadExpiries();
+        await loadChartCandles();
+        fetchOptionChainData();
+    }
+
+    // 17. Strike Diversion Modal
+    let diversionModalInstance = null;
+    function openDiversionModal(strike, type, level, ltp) {
+        document.getElementById("div-modal-strike-title").innerText = `${strike} ${type} Diversion Reversal`;
+        document.getElementById("div-modal-level").innerText = `$${level.toFixed(1)}`;
+        document.getElementById("div-modal-entry").innerText = `$${level.toFixed(1)}`;
+
+        const isCall = type === "CALL";
+        const target = isCall ? (level * 1.01).toFixed(1) : (level * 0.99).toFixed(1);
+        const sl = isCall ? (level * 0.995).toFixed(1) : (level * 1.005).toFixed(1);
+
+        document.getElementById("div-modal-target").innerText = `$${target}`;
+        document.getElementById("div-modal-sl").innerText = `$${sl}`;
+        document.getElementById("div-modal-explanation").innerText = isCall 
+            ? `प्राइस जब $${level.toFixed(1)} पर आए तो CALL (CE) बाय का रिवर्सल ट्रेड बनता है।`
+            : `प्राइस जब $${level.toFixed(1)} पर आए तो PUT (PE) बाय का रिवर्सल ट्रेड बनता है।`;
+
+        const modalEl = document.getElementById("diversionDetailModal");
+        if (!diversionModalInstance) diversionModalInstance = new bootstrap.Modal(modalEl);
+        diversionModalInstance.show();
+    }
+
+    function plotModalLineOnChart() {
+        const lvlStr = document.getElementById("div-modal-level").innerText.replace('$', '').trim();
+        const price = parseFloat(lvlStr);
+        if (candlestickSeries && price > 0) {
+            candlestickSeries.createPriceLine({
+                price: price,
+                color: '#38bdf8',
+                lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid,
+                title: 'Custom Level'
+            });
+            showToast("Chart Updated", `Line plotted @ $${price}`, "info");
+        }
+    }
+
+    // 18. Black-Scholes Greeks Calculator
+    function calculateGreeks() {
+        const spot = parseFloat(document.getElementById("bs-calc-spot").value) || 77850;
+        const strike = parseFloat(document.getElementById("bs-calc-strike").value) || 78000;
+        const iv = (parseFloat(document.getElementById("bs-calc-iv").value) || 45) / 100.0;
+        const dte = (parseFloat(document.getElementById("bs-calc-dte").value) || 2) / 365.0;
+
+        // Standard BS Approximation
+        const d1 = (Math.log(spot / strike) + (0.05 + 0.5 * iv * iv) * dte) / (iv * Math.sqrt(dte));
+        const d2 = d1 - iv * Math.sqrt(dte);
+
+        // Simple normal cdf approx
+        function cdf(x) {
+            return 1.0 / (1.0 + Math.exp(-1.654 * x));
+        }
+
+        const callFair = spot * cdf(d1) - strike * Math.exp(-0.05 * dte) * cdf(d2);
+        const putFair = strike * Math.exp(-0.05 * dte) * cdf(-d2) - spot * cdf(-d1);
+
+        document.getElementById("bs-out-call").innerText = `$${Math.max(1, callFair).toFixed(2)}`;
+        document.getElementById("bs-out-put").innerText = `$${Math.max(1, putFair).toFixed(2)}`;
+        document.getElementById("bs-out-delta").innerText = `${cdf(d1).toFixed(2)} / ${(cdf(d1) - 1).toFixed(2)}`;
+        document.getElementById("bs-out-theta").innerText = `-$${((spot * iv) / (2 * Math.sqrt(dte) * 365)).toFixed(2)}`;
+    }
+
+    // 19. Telegram Client Controller
+    let telegramModalInstance = null;
+    function openTelegramModal() {
+        const modalEl = document.getElementById("telegramSettingsModal");
+        if (!telegramModalInstance) telegramModalInstance = new bootstrap.Modal(modalEl);
+        telegramModalInstance.show();
+    }
+
+    function toggleTgTokenVisibility() {
+        const el = document.getElementById("tg-token");
+        const icon = document.getElementById("icon-tg-eye");
+        if (el.type === "password") { el.type = "text"; icon.className = "fa-regular fa-eye-slash"; }
+        else { el.type = "password"; icon.className = "fa-regular fa-eye"; }
+    }
+
+    async function loadTelegramConfig() {
+        try {
+            const resp = await fetch("/api/telegram/config");
+            const data = await resp.json();
+            if (data.status === "success" && data.config) {
+                const cfg = data.config;
+                if (document.getElementById("tg-token")) document.getElementById("tg-token").value = cfg.bot_token_masked || "";
+                if (document.getElementById("tg-chatid")) document.getElementById("tg-chatid").value = cfg.chat_id || "";
+                if (document.getElementById("tg-enabled")) document.getElementById("tg-enabled").checked = !!cfg.enabled;
+            }
+        } catch(e) {}
+    }
+
+    async function saveTelegramSettings() {
+        const bot_token = document.getElementById("tg-token")?.value.trim();
+        const chat_id = document.getElementById("tg-chatid")?.value.trim();
+        const enabled = !!document.getElementById("tg-enabled")?.checked;
+        const fb = document.getElementById("telegram-feedback-banner");
+
+        try {
+            const resp = await fetch("/api/telegram/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ bot_token, chat_id, enabled })
+            });
+            const data = await resp.json();
+            if (resp.ok && data.status === "success") {
+                fb.className = "alert alert-success d-block mb-3 py-2 px-3 small";
+                fb.innerHTML = '<i class="fa-solid fa-circle-check me-2"></i><strong>Settings Saved!</strong> Telegram alerts configured.';
+                showToast("Telegram Settings", "Saved successfully!", "success");
+            }
+        } catch(e) {
+            fb.className = "alert alert-danger d-block mb-3 py-2 px-3 small";
+            fb.innerHTML = `Error: ${e.message}`;
+        }
+    }
+
+    async function testTelegramAlert() {
+        showToast("Telegram", "Sending test message...", "info");
+        try {
+            const resp = await fetch("/api/telegram/test", { method: "POST" });
+            const data = await resp.json();
+            if (data.status === "success") showToast("Telegram Alert Sent! ✅", "Check your Telegram!", "success");
+            else showToast("Telegram Notice", data.message || "Failed", "warning");
+        } catch(e) {
+            showToast("Error", e.message, "danger");
+        }
+    }
+
+    async function sendTelegramLiveSnapshot() {
+        const inst = document.getElementById("instrument-select")?.value || "BTC";
+        showToast("Telegram Snapshot", `Sending live ${inst} levels to Telegram...`, "info");
+        try {
+            const resp = await fetch(`/api/telegram/send-status?asset=${encodeURIComponent(inst)}`, { method: "POST" });
+            const data = await resp.json();
+            if (data.status === "success" && data.result?.status === "success") {
+                showToast("Sent to Telegram! ✅", `Live ${inst} levels dispatched!`, "success");
+            } else {
+                showToast("Notice", data.result?.message || "Failed", "warning");
+            }
+        } catch(e) {
+            showToast("Error", e.message, "danger");
+        }
+    }
+
+    // 20. WhatsApp Modal & Config
+    let whatsappModalInstance = null;
+    function openWhatsAppModal() {
+        const modalEl = document.getElementById("whatsappSettingsModal");
+        if (!whatsappModalInstance) whatsappModalInstance = new bootstrap.Modal(modalEl);
+        whatsappModalInstance.show();
+    }
+
+    async function loadWhatsAppConfig() {
+        try {
+            const resp = await fetch("/api/whatsapp/config");
+            const data = await resp.json();
+            if (data.status === "success" && data.config) {
+                const cfg = data.config;
+                if (document.getElementById("wa-phone")) document.getElementById("wa-phone").value = cfg.phone || "";
+                if (document.getElementById("wa-apikey")) document.getElementById("wa-apikey").value = cfg.apikey_masked || "";
+                if (document.getElementById("wa-enabled")) document.getElementById("wa-enabled").checked = !!cfg.enabled;
+            }
+        } catch(e) {}
+    }
+
+    async function saveWhatsAppSettings() {
+        const phone = document.getElementById("wa-phone")?.value.trim();
+        const apikey = document.getElementById("wa-apikey")?.value.trim();
+        const enabled = !!document.getElementById("wa-enabled")?.checked;
+        try {
+            await fetch("/api/whatsapp/config", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ phone, apikey, enabled })
+            });
+            showToast("WhatsApp Settings", "Saved successfully!", "success");
+        } catch(e) {}
+    }
+
+    async function testWhatsAppAlert() {
+        showToast("WhatsApp", "Sending test message...", "info");
+        try {
+            await fetch("/api/whatsapp/test", { method: "POST" });
+            showToast("WhatsApp Sent", "Test alert dispatched!", "success");
+        } catch(e) {}
+    }
+
+    // 21. Trade Audit Data Loader
+    async function loadTradeAuditData(evaluateNow = false) {
+        try {
+            const resp = await fetch(`/api/trade-audit?evaluate_now=${evaluateNow ? 'true' : 'false'}`);
+            const data = await resp.json();
+            if (data.summary) {
+                const s = data.summary;
+                if (document.getElementById("stat-total-setups")) document.getElementById("stat-total-setups").innerText = s.total_setups || 0;
+                if (document.getElementById("stat-target-hits")) document.getElementById("stat-target-hits").innerText = s.target_hits || 0;
+                if (document.getElementById("stat-sl-hits")) document.getElementById("stat-sl-hits").innerText = s.sl_hits || 0;
+                if (document.getElementById("stat-active-trades")) document.getElementById("stat-active-trades").innerText = s.active_trades || 0;
+                if (document.getElementById("stat-win-rate")) document.getElementById("stat-win-rate").innerText = `${s.win_rate_pct || 0}%`;
+            }
+
+            const tbody = document.getElementById("audit-table-body");
+            if (tbody && data.trades) {
+                if (data.trades.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="9" class="text-muted py-3">No trade setups logged yet today.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = "";
+                data.trades.forEach(t => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td class="font-monospace">${t.timestamp}</td>
+                        <td><span class="badge bg-secondary font-monospace">${t.asset}</span></td>
+                        <td>${t.setup_type}</td>
+                        <td class="text-info font-monospace">$${Number(t.entry_level).toLocaleString()}</td>
+                        <td class="text-success font-monospace">$${Number(t.target_price).toLocaleString()}</td>
+                        <td class="text-danger font-monospace">$${Number(t.sl_price).toLocaleString()}</td>
+                        <td><span class="badge ${t.badge_class} p-1 px-2">${t.outcome_text}</span></td>
+                        <td class="font-monospace">${t.duration_text}</td>
+                        <td class="text-secondary text-truncate" style="max-width:200px;">${t.notes || '-'}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            }
+        } catch(e) {}
+    }
+
+    // 22. Voice Alert Player & Toast Helper
+    function toggleVoiceAlerts() {
+        voiceAlertsEnabled = !voiceAlertsEnabled;
+        const textEl = document.getElementById("text-voice-status");
+        if (textEl) textEl.innerText = voiceAlertsEnabled ? "Voice: ON" : "Voice: OFF";
+        showToast("Voice Alerts", voiceAlertsEnabled ? "Hindi Audio Alerts Activated" : "Voice Alerts Muted", "info");
+    }
+
+    function testHindiVoice() {
+        const audio = new Audio(`/api/tts-audio?text=${encodeURIComponent("सावधान! क्रिप्टो का रिवर्सल लेवल आ गया है")}`);
+        audio.play().catch(e => console.warn(e));
+        showToast("Hindi Audio", "Playing test voice alert...", "info");
+    }
+
+    function showToast(title, message, type = "info") {
+        const container = document.getElementById("toast-container");
+        if (!container) return;
+        const toast = document.createElement("div");
+        const bgClass = type === "success" ? "bg-success" : (type === "danger" ? "bg-danger" : (type === "warning" ? "bg-warning text-dark" : "bg-dark border border-secondary text-light"));
+        toast.className = `toast align-items-center ${bgClass} border-0 show shadow mb-2`;
+        toast.setAttribute("role", "alert");
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body small fw-semibold">
+                    <strong>${title}:</strong> ${message}
+                </div>
+                <button type="button" class="btn-close ${type === 'warning' ? '' : 'btn-close-white'} me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        container.appendChild(toast);
+        setTimeout(() => toast.remove(), 4000);
+    }
+
+    // 23. Initialize Everything on DOM Load
+    window.addEventListener("DOMContentLoaded", async () => {
+        initLightweightChart();
+        await loadExpiries();
+        await loadChartCandles();
+        fetchOptionChainData();
+        startFastSpotTracker();
+        loadTelegramConfig();
+        loadWhatsAppConfig();
+        loadTradeAuditData();
+
+        // 60-Second Full Option Chain Refresh Timer
+        setInterval(() => {
+            fetchOptionChainData();
+        }, 60000);
+    });
+</script>
+
+</body>
+</html>

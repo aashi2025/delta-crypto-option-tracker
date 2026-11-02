@@ -52,13 +52,17 @@ class TradeAuditEngine:
         service,
         calc_engine,
         buffer_pct: float = 0.003, # 0.3% buffer range
-        cooldown_minutes: int = 60 # 60 minutes anti-spam debounce
+        cooldown_minutes: int = 60, # 60 minutes anti-spam debounce
+        whatsapp_service = None,
+        telegram_service = None
     ):
         self.db = db
         self.service = service
         self.calc_engine = calc_engine
         self.buffer_pct = buffer_pct
         self.cooldown_minutes = cooldown_minutes
+        self.whatsapp_service = whatsapp_service
+        self.telegram_service = telegram_service
         self.running = False
         self.worker_thread: Optional[threading.Thread] = None
         self._lock = threading.Lock()
@@ -291,6 +295,38 @@ class TradeAuditEngine:
                         status="ACTIVE",
                         notes=notes
                     )
+                    # Trigger WhatsApp Alert 1 (Entry Trigger)
+                    if self.whatsapp_service:
+                        try:
+                            self.whatsapp_service.send_entry_alert(
+                                asset=symbol_prefix,
+                                setup_type=setup_type,
+                                entry_price=entry,
+                                target_price=target,
+                                sl_price=sl,
+                                trigger_time=now_str,
+                                trade_id=trade_id,
+                                notes=notes
+                            )
+                        except Exception as _w_err:
+                            print(f"[WARNING] WhatsApp entry alert dispatch error: {_w_err}")
+
+                    # Trigger Telegram Alert 1 (Entry Trigger)
+                    if self.telegram_service:
+                        try:
+                            self.telegram_service.send_entry_alert(
+                                asset=symbol_prefix,
+                                setup_type=setup_type,
+                                entry_price=entry,
+                                target_price=target,
+                                sl_price=sl,
+                                trigger_time=now_str,
+                                trade_id=trade_id,
+                                notes=notes
+                            )
+                        except Exception as _t_err:
+                            print(f"[WARNING] Telegram entry alert dispatch error: {_t_err}")
+
                     log_item = {
                         "id": trade_id,
                         "timestamp": now_str,
@@ -329,6 +365,38 @@ class TradeAuditEngine:
                         status="ACTIVE",
                         notes=notes
                     )
+                    # Trigger WhatsApp Alert 1 (Entry Trigger)
+                    if self.whatsapp_service:
+                        try:
+                            self.whatsapp_service.send_entry_alert(
+                                asset=symbol_prefix,
+                                setup_type=setup_type,
+                                entry_price=entry,
+                                target_price=target,
+                                sl_price=sl,
+                                trigger_time=now_str,
+                                trade_id=trade_id,
+                                notes=notes
+                            )
+                        except Exception as _w_err:
+                            print(f"[WARNING] WhatsApp entry alert dispatch error: {_w_err}")
+
+                    # Trigger Telegram Alert 1 (Entry Trigger)
+                    if self.telegram_service:
+                        try:
+                            self.telegram_service.send_entry_alert(
+                                asset=symbol_prefix,
+                                setup_type=setup_type,
+                                entry_price=entry,
+                                target_price=target,
+                                sl_price=sl,
+                                trigger_time=now_str,
+                                trade_id=trade_id,
+                                notes=notes
+                            )
+                        except Exception as _t_err:
+                            print(f"[WARNING] Telegram entry alert dispatch error: {_t_err}")
+
                     log_item = {
                         "id": trade_id,
                         "timestamp": now_str,
@@ -473,6 +541,34 @@ class TradeAuditEngine:
                         )
                         resolved = True
                         print(f"[AUDIT RESOLVED] 🎯 Trade #{t_id} {trade_asset} TARGET HIT ({c_time_str} IST): +{pts:,.2f} pts in {duration_min} min")
+                        if self.whatsapp_service:
+                            try:
+                                self.whatsapp_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="TARGET HIT ✅",
+                                    exit_price=target_price,
+                                    points=pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _w_err:
+                                print(f"[WARNING] WhatsApp outcome alert error: {_w_err}")
+                        if self.telegram_service:
+                            try:
+                                self.telegram_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="TARGET HIT ✅",
+                                    exit_price=target_price,
+                                    points=pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _t_err:
+                                print(f"[WARNING] Telegram outcome alert error: {_t_err}")
                         break
                     elif c_low <= sl_price:
                         loss_pts = round(entry_level - sl_price, 2)
@@ -487,6 +583,34 @@ class TradeAuditEngine:
                         )
                         resolved = True
                         print(f"[AUDIT RESOLVED] ❌ Trade #{t_id} {trade_asset} SL HIT ({c_time_str} IST): -{loss_pts:,.2f} pts in {duration_min} min")
+                        if self.whatsapp_service:
+                            try:
+                                self.whatsapp_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="SL HIT ❌",
+                                    exit_price=sl_price,
+                                    points=-loss_pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _w_err:
+                                print(f"[WARNING] WhatsApp outcome alert error: {_w_err}")
+                        if self.telegram_service:
+                            try:
+                                self.telegram_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="SL HIT ❌",
+                                    exit_price=sl_price,
+                                    points=-loss_pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _t_err:
+                                print(f"[WARNING] Telegram outcome alert error: {_t_err}")
                         break
 
                 elif setup_type == "EOR Bearish Reversal":
@@ -503,6 +627,34 @@ class TradeAuditEngine:
                         )
                         resolved = True
                         print(f"[AUDIT RESOLVED] 🎯 Trade #{t_id} {trade_asset} TARGET HIT ({c_time_str} IST): +{pts:,.2f} pts in {duration_min} min")
+                        if self.whatsapp_service:
+                            try:
+                                self.whatsapp_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="TARGET HIT ✅",
+                                    exit_price=target_price,
+                                    points=pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _w_err:
+                                print(f"[WARNING] WhatsApp outcome alert error: {_w_err}")
+                        if self.telegram_service:
+                            try:
+                                self.telegram_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="TARGET HIT ✅",
+                                    exit_price=target_price,
+                                    points=pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _t_err:
+                                print(f"[WARNING] Telegram outcome alert error: {_t_err}")
                         break
                     elif c_high >= sl_price:
                         loss_pts = round(sl_price - entry_level, 2)
@@ -517,6 +669,34 @@ class TradeAuditEngine:
                         )
                         resolved = True
                         print(f"[AUDIT RESOLVED] ❌ Trade #{t_id} {trade_asset} SL HIT ({c_time_str} IST): -{loss_pts:,.2f} pts in {duration_min} min")
+                        if self.whatsapp_service:
+                            try:
+                                self.whatsapp_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="SL HIT ❌",
+                                    exit_price=sl_price,
+                                    points=-loss_pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _w_err:
+                                print(f"[WARNING] WhatsApp outcome alert error: {_w_err}")
+                        if self.telegram_service:
+                            try:
+                                self.telegram_service.send_outcome_alert(
+                                    asset=trade_asset,
+                                    setup_type=setup_type,
+                                    outcome="SL HIT ❌",
+                                    exit_price=sl_price,
+                                    points=-loss_pts,
+                                    duration_minutes=duration_min,
+                                    exit_time=c_time_str,
+                                    trade_id=t_id
+                                )
+                            except Exception as _t_err:
+                                print(f"[WARNING] Telegram outcome alert error: {_t_err}")
                         break
 
             # 2. Live Spot Fallback Check
@@ -535,16 +715,56 @@ class TradeAuditEngine:
                         if live_spot >= target_price:
                             pts = round(target_price - entry_level, 2)
                             self.db.update_trade_outcome(t_id, "TARGET HIT ✅", now_str, pts, 0.0, duration_min, f"Live Spot hit Target: {live_spot:,.2f}")
+                            if self.whatsapp_service:
+                                try:
+                                    self.whatsapp_service.send_outcome_alert(trade_asset, setup_type, "TARGET HIT ✅", live_spot, pts, duration_min, now_str, t_id)
+                                except Exception as _w_err:
+                                    print(f"[WARNING] WhatsApp fallback outcome alert error: {_w_err}")
+                            if self.telegram_service:
+                                try:
+                                    self.telegram_service.send_outcome_alert(trade_asset, setup_type, "TARGET HIT ✅", live_spot, pts, duration_min, now_str, t_id)
+                                except Exception as _t_err:
+                                    print(f"[WARNING] Telegram fallback outcome alert error: {_t_err}")
                         elif live_spot <= sl_price:
                             loss_pts = round(entry_level - sl_price, 2)
                             self.db.update_trade_outcome(t_id, "SL HIT ❌", now_str, 0.0, loss_pts, duration_min, f"Live Spot hit SL: {live_spot:,.2f}")
+                            if self.whatsapp_service:
+                                try:
+                                    self.whatsapp_service.send_outcome_alert(trade_asset, setup_type, "SL HIT ❌", live_spot, -loss_pts, duration_min, now_str, t_id)
+                                except Exception as _w_err:
+                                    print(f"[WARNING] WhatsApp fallback outcome alert error: {_w_err}")
+                            if self.telegram_service:
+                                try:
+                                    self.telegram_service.send_outcome_alert(trade_asset, setup_type, "SL HIT ❌", live_spot, -loss_pts, duration_min, now_str, t_id)
+                                except Exception as _t_err:
+                                    print(f"[WARNING] Telegram fallback outcome alert error: {_t_err}")
                     elif setup_type == "EOR Bearish Reversal":
                         if live_spot <= target_price:
                             pts = round(entry_level - target_price, 2)
                             self.db.update_trade_outcome(t_id, "TARGET HIT ✅", now_str, pts, 0.0, duration_min, f"Live Spot hit Target: {live_spot:,.2f}")
+                            if self.whatsapp_service:
+                                try:
+                                    self.whatsapp_service.send_outcome_alert(trade_asset, setup_type, "TARGET HIT ✅", live_spot, pts, duration_min, now_str, t_id)
+                                except Exception as _w_err:
+                                    print(f"[WARNING] WhatsApp fallback outcome alert error: {_w_err}")
+                            if self.telegram_service:
+                                try:
+                                    self.telegram_service.send_outcome_alert(trade_asset, setup_type, "TARGET HIT ✅", live_spot, pts, duration_min, now_str, t_id)
+                                except Exception as _t_err:
+                                    print(f"[WARNING] Telegram fallback outcome alert error: {_t_err}")
                         elif live_spot >= sl_price:
                             loss_pts = round(sl_price - entry_level, 2)
                             self.db.update_trade_outcome(t_id, "SL HIT ❌", now_str, 0.0, loss_pts, duration_min, f"Live Spot hit SL: {live_spot:,.2f}")
+                            if self.whatsapp_service:
+                                try:
+                                    self.whatsapp_service.send_outcome_alert(trade_asset, setup_type, "SL HIT ❌", live_spot, -loss_pts, duration_min, now_str, t_id)
+                                except Exception as _w_err:
+                                    print(f"[WARNING] WhatsApp fallback outcome alert error: {_w_err}")
+                            if self.telegram_service:
+                                try:
+                                    self.telegram_service.send_outcome_alert(trade_asset, setup_type, "SL HIT ❌", live_spot, -loss_pts, duration_min, now_str, t_id)
+                                except Exception as _t_err:
+                                    print(f"[WARNING] Telegram fallback outcome alert error: {_t_err}")
 
     def seed_historical_audit_records_if_empty(self):
         """
